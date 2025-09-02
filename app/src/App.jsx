@@ -155,8 +155,9 @@ const FinanceTracker = ({ auth, db, userId }) => {
         if (start && transactionDate < start) return false;
         if (end && transactionDate > end) return false;
         if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
-        if (classificationFilter === 'Classificados' && !t.category) return false;
-        if (classificationFilter === 'A Classificar' && t.category) return false;
+        // CORREÇÃO: Verifica se a categoria é nula ou uma string vazia
+        if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
+        if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
         return true;
     });
 
@@ -165,12 +166,13 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const totalBalance = totalRevenue + totalExpense;
     
     const barChartData = [];
-    const unclassifiedCount = transactions.filter(t => !t.category).length;
+    // CORREÇÃO: Conta como não classificado se a categoria for nula ou uma string vazia
+    const unclassifiedCount = transactions.filter(t => !t.category || t.category === '').length;
     const totalRaul = transactions.filter(t => t.importer === 'Raul').length;
-    const classifiedRaul = transactions.filter(t => t.importer === 'Raul' && t.category).length;
+    const classifiedRaul = transactions.filter(t => t.importer === 'Raul' && t.category && t.category !== '').length;
     const raulProgress = totalRaul > 0 ? (classifiedRaul / totalRaul) * 100 : 0;
     const totalKarol = transactions.filter(t => t.importer === 'Karol').length;
-    const classifiedKarol = transactions.filter(t => t.importer === 'Karol' && t.category).length;
+    const classifiedKarol = transactions.filter(t => t.importer === 'Karol' && t.category && t.category !== '').length;
     const karolProgress = totalKarol > 0 ? (classifiedKarol / totalKarol) * 100 : 0;
 
     if (loading) return <LoadingScreen />;
