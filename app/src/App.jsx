@@ -1,190 +1,215 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Erro de Build - ContadorZinho</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .fade-in {
-            animation: fadeIn 0.5s ease-in-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .code-block {
-            font-family: 'Fira Code', monospace;
-            background-color: #2D2D2D;
-            color: #F8F8F2;
-            border-radius: 5px;
-            padding: 15px;
-            overflow-x: auto;
-            position: relative;
-        }
-        .copy-btn {
-            transition: all 0.2s ease;
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-        .line-number {
-            color: #6A9955;
-            margin-right: 15px;
-            user-select: none;
-        }
-        .error-line {
-            background-color: #FF000020;
-            border-left: 3px solid #FF0000;
-        }
-        .tab {
-            margin-left: 20px;
-        }
-    </style>
-</head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
-    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg overflow-hidden fade-in">
-        <div class="md:flex">
-            <div class="md:w-2/5 bg-gradient-to-b from-red-500 to-red-600 p-8 text-white flex flex-col justify-center">
-                <div class="text-center">
-                    <i class="fas fa-exclamation-triangle text-5xl mb-4"></i>
-                    <h1 class="text-3xl font-bold mb-2">Erro de Build</h1>
-                    <p class="opacity-90">Problema no processo de construção no Vercel</p>
-                </div>
-                <div class="mt-10">
-                    <div class="bg-red-700 bg-opacity-40 p-4 rounded-lg">
-                        <h2 class="font-bold text-lg mb-2"><i class="fas fa-lightbulb mr-2"></i>Erro Detectado</h2>
-                        <p class="text-sm">Transform failed with 1 error:<br>/vercel/path0/app/src/App.jsx:1:1: ERROR: Expected identifier but found "!"</p>
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from 'firebase/auth';
+import { getFirestore, doc, collection, onSnapshot, addDoc, query } from 'firebase/firestore';
+
+// --- COMPONENTES AUXILIARES ---
+const formatCurrency = (value) => {
+  if (typeof value !== 'number') return 'R$ 0,00';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+const LoadingScreen = () => (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-xl font-semibold text-gray-700">A carregar...</div>
+    </div>
+);
+
+// --- TELA PRINCIPAL DO APP DE FINANÇAS ---
+const FinanceTracker = ({ auth, db, userId }) => {
+    const [transactions, setTransactions] = useState([]);
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [type, setType] = useState('receita');
+    const [manualDate, setManualDate] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [isResponsiblePopupOpen, setIsResponsiblePopupOpen] = useState(false);
+
+    useEffect(() => {
+        if (!db || !userId) return;
+        const transactionsCollection = collection(db, `users/${userId}/transactions`);
+        const unsubscribe = onSnapshot(query(transactionsCollection), (snapshot) => {
+            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            fetched.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            setTransactions(fetched);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [db, userId]);
+
+    const addTransaction = (e, responsible) => {
+        e.preventDefault();
+        if (!description || !amount || !manualDate) return;
+        const data = { description, amount: parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate) };
+        addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
+            setDescription(''); setAmount(''); setManualDate(''); setIsResponsiblePopupOpen(false);
+        });
+    };
+
+    if (loading) return <LoadingScreen />;
+
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
+            {isResponsiblePopupOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                  <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
+                    <h3 className="text-xl font-bold">Quem é o responsável?</h3>
+                    <div className="flex gap-4">
+                      <button onClick={(e) => addTransaction(e, 'Raul')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Raul</button>
+                      <button onClick={(e) => addTransaction(e, 'Karol')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Karol</button>
                     </div>
+                    <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Cancelar</button>
+                  </div>
                 </div>
+            )}
+            <div className="max-w-4xl mx-auto space-y-8">
+                <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
+                    <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
+                    <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Sair</button>
+                </header>
+                 <section className="bg-white p-6 rounded-xl shadow-lg">
+                  <h2 className="text-2xl font-bold mb-4 text-gray-900">Adicionar Nova Transação</h2>
+                  <form className="space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                      <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Valor" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <select value={type} onChange={(e) => setType(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+                      <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                    </div>
+                    <button type="button" onClick={() => setIsResponsiblePopupOpen(true)} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Adicionar Transação</button>
+                  </form>
+                </section>
+                <section className="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-900">Histórico de Transações</h2>
+                    {transactions.length > 0 ? (
+                        <ul className="divide-y divide-gray-200">
+                            {transactions.map((t) => (
+                                <li key={t.id} className="py-4 flex justify-between items-center">
+                                    <div>
+                                        <p className="font-medium">{t.description}</p>
+                                        <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (<p className="text-center text-gray-500">Nenhuma transação adicionada ainda.</p>)}
+                </section>
             </div>
-            
-            <div class="md:w-3/5 p-8">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">Como resolver este erro</h2>
-                
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2 flex items-center">
-                        <i class="fas fa-bug mr-2 text-red-500"></i>Problema no arquivo App.jsx
-                    </h3>
-                    <p class="text-gray-600 mb-3">Seu arquivo App.jsx provavelmente contém um caractere inválido na primeira linha. Isso pode ser causado por:</p>
-                    <ul class="list-disc list-inside text-gray-600 mb-4 tab">
-                        <li>Caractere BOM (Byte Order Mark) no início do arquivo</li>
-                        <li>Caractere especial ou invisível</li>
-                        <li>Falta de uma importação ou declaração no início</li>
-                    </ul>
-                    
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2 flex items-center mt-4">
-                        <i class="fas fa-wrench mr-2 text-red-500"></i>Solução
-                    </h3>
-                    <p class="text-gray-600 mb-3">Abra o arquivo App.jsx e certifique-se de que ele começa com a declaração de importação do React:</p>
-                    
-                    <div class="code-block mb-4">
-                        <button class="copy-btn bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm">
-                            <i class="fas fa-copy mr-1"></i> Copiar
-                        </button>
-                        <pre><code><span class="line-number">1</span>import React, { useState, useEffect } from 'react';</code></pre>
+        </div>
+    );
+};
+
+// --- TELA DE LOGIN E REGISTO ---
+const AuthScreen = ({ auth }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLogin, setIsLogin] = useState(true);
+    const [error, setError] = useState('');
+
+    const handleAuthAction = async (e) => {
+        e.preventDefault();
+        setError('');
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+        } catch (err) {
+            setError(err.message.replace('Firebase: ', '').replace('Error ', '').replace(/ \(auth.*\)\.?/, ''));
+        }
+    };
+    
+    return (
+        <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
+            <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
+                <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">{isLogin ? 'Login' : 'Registo'}</h2>
+                <form onSubmit={handleAuthAction} className="space-y-6">
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                        <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
                     </div>
-                    
-                    <p class="text-gray-600 mb-3">Verifique também se não há caracteres inválidos antes da primeira linha.</p>
-                    
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2 flex items-center mt-4">
-                        <i class="fas fa-code mr-2 text-red-500"></i>App.jsx corrigido
-                    </h3>
-                    <p class="text-gray-600 mb-3">Seu arquivo App.jsx deve ser semelhante a este:</p>
-                    
-                    <div class="code-block mb-4" style="max-height: 300px; overflow-y: auto;">
-                        <button class="copy-btn bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm">
-                            <i class="fas fa-copy mr-1"></i> Copiar
-                        </button>
-                        <pre><code><span class="line-number">1</span>import React, { useState, useEffect } from 'react';
-<span class="line-number">2</span>import { initializeApp } from 'firebase/app';
-<span class="line-number">3</span>import { 
-<span class="line-number">4</span>  getAuth, 
-<span class="line-number">5</span>  onAuthStateChanged,
-<span class="line-number">6</span>  createUserWithEmailAndPassword,
-<span class="line-number">7</span>  signInWithEmailAndPassword,
-<span class="line-number">8</span>  signOut
-<span class="line-number">9</span>} from 'firebase/auth';
-<span class="line-number">10</span>import { getFirestore, collection, onSnapshot, addDoc, query } from 'firebase/firestore';
-<span class="line-number">11</span>
-<span class="line-number">12</span>// Configuração do Firebase
-<span class="line-number">13</span>const firebaseConfig = {
-<span class="line-number">14</span>  apiKey: "AIzaSyBv0WRGvYlmBotnBc2InD85N1teQf45V2g",
-<span class="line-number">15</span>  authDomain: "casinha-kr.firebaseapp.com",
-<span class="line-number">16</span>  projectId: "casinha-kr",
-<span class="line-number">17</span>  storageBucket: "casinha-kr.firebasestorage.app",
-<span class="line-number">18</span>  messagingSenderId: "311939192764",
-<span class="line-number">19</span>  appId: "1:311939192764:web:6a14910e5c35c4391a3db9",
-<span class="line-number">20</span>  measurementId: "G-EDMYBHR1TY"
-<span class="line-number">21</span>};
-<span class="line-number">22</span>
-<span class="line-number">23</span>// Inicialize o Firebase
-<span class="line-number">24</span>const app = initializeApp(firebaseConfig);
-<span class="line-number">25</span>const auth = getAuth(app);
-<span class="line-number">26</span>const db = getFirestore(app);
-<span class="line-number">27</span>
-<span class="line-number">28</span>// Restante do seu código...</code></pre>
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha</label>
+                        <input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
                     </div>
-                </div>
-                
-                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-circle text-yellow-400"></i>
-                        </div>
-                        <div class="ml-3">
-                            <p class="text-sm text-yellow-700">
-                                <strong>Importante:</strong> Se você estiver usando um editor de texto como Notepad++, Sublime Text ou VS Code, 
-                                verifique a codificação do arquivo (deve ser UTF-8 sem BOM) e certifique-se de que não há caracteres invisíveis 
-                                no início do arquivo.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex justify-between items-center mt-8">
-                    <a href="#" class="text-blue-600 hover:text-blue-800 flex items-center">
-                        <i class="fas fa-arrow-left mr-2"></i> Voltar para o login
-                    </a>
-                    <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center">
-                        <i class="fas fa-sync-alt mr-2"></i> Tentar novamente
+                    {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+                    <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                        {isLogin ? 'Entrar' : 'Criar Conta'}
+                    </button>
+                </form>
+                <div className="text-center mt-6">
+                    <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                        {isLogin ? 'Não tem uma conta? Registe-se' : 'Já tem uma conta? Faça login'}
                     </button>
                 </div>
             </div>
         </div>
-    </div>
+    );
+};
 
-    <script>
-        // Funcionalidade para copiar o bloco de código
-        document.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const codeBlock = this.parentElement.querySelector('code');
-                const code = codeBlock.innerText;
-                
-                // Remove line numbers
-                const codeWithoutLineNumbers = code.replace(/\d+\s/g, '');
-                
-                navigator.clipboard.writeText(codeWithoutLineNumbers).then(() => {
-                    const originalHtml = this.innerHTML;
-                    this.innerHTML = '<i class="fas fa-check mr-1"></i> Copiado!';
-                    setTimeout(() => {
-                        this.innerHTML = originalHtml;
-                    }, 2000);
-                });
+// --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
+function App() {
+    const [db, setDb] = useState(null);
+    const [auth, setAuth] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [view, setView] = useState('loading');
+
+    useEffect(() => {
+        try {
+            // Abordagem à prova de falhas: Montar o objeto a partir de variáveis individuais
+            const firebaseConfig = {
+                apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+                authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+                projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+                storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+                messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+                appId: import.meta.env.VITE_FIREBASE_APP_ID,
+                measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+            };
+            
+            if (!firebaseConfig.apiKey) {
+                console.error("Chaves do Firebase não foram carregadas. Verifique as variáveis de ambiente na Vercel.");
+                // Não pare a aplicação, mas o login irá falhar, o que é o comportamento esperado se as chaves estiverem em falta.
+            }
+
+            const firebaseApp = initializeApp(firebaseConfig);
+            const firebaseAuth = getAuth(firebaseApp);
+            const firestoreDb = getFirestore(firebaseApp);
+            setDb(firestoreDb);
+            setAuth(firebaseAuth);
+
+            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+                if (user) {
+                    setUserId(user.uid);
+                    setView('app');
+                } else {
+                    setUserId(null);
+                    setView('auth');
+                }
             });
-        });
-        
-        // Simular tentativa novamente
-        document.querySelector('.bg-red-600').addEventListener('click', function() {
-            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Verificando...';
-            setTimeout(() => {
-                this.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> Erro ainda persiste';
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-sync-alt mr-2"></i> Tentar novamente';
-                }, 2000);
-            }, 1500);
-        });
-    </script>
-</body>
-</html>
+            return () => unsubscribe();
+        } catch (e) {
+            console.error("Erro na inicialização do Firebase:", e);
+            setView('auth');
+        }
+    }, []);
+
+    if (view === 'loading') return <LoadingScreen />;
+    if (view === 'auth') return <AuthScreen auth={auth} />;
+    if (view === 'app') return <FinanceTracker auth={auth} db={db} userId={userId} />;
+    
+    return <LoadingScreen />;
+}
+
+export default App;
+
