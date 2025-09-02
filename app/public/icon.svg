@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <rect width="100" height="100" rx="22" fill="#4f46e5"/>
-  <!-- Ícone de mealheiro -->
-  <path fill="white" d="M75,35H65V30a5,5,0,0,0-5-5H40a5,5,0,0,0-5,5v5H25a5,5,0,0,0-5,5V70a5,5,0,0,0,5,5H75a5,5,0,0,0,5-5V40A5,5,0,0,0,75,35ZM45,35h10V30H45Zm15,25a5,5,0,1,1-5-5A5,5,0,0,1,60,60Z"/>
+  <!-- Ícone de casa com "KR" -->
+  <path fill="white" d="M50 25 L20 50 H30 V80 H70 V50 H80 Z"/>
+  <text x="50" y="72" font-size="28" fill="#4f46e5" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold">KR</text>
 </svg>
 
