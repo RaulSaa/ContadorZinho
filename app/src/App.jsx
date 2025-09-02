@@ -69,8 +69,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js';
         script.onload = () => {
-            window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
-            setIsPdfJsLoaded(true);
+            if (window['pdfjs-dist/build/pdf']) {
+                window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
+                setIsPdfJsLoaded(true);
+            }
         };
         document.body.appendChild(script);
         return () => {
@@ -129,6 +131,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
         if (isClassified) {
             if (lines.length <= 1) return transactions;
             for (let i = 1; i < lines.length; i++) {
+                const line = lines[i]; // CORREÇÃO: A variável 'line' estava em falta
                 const parts = line.split(';');
                 if (parts.length < 6) continue;
                 const [dateString, description, type, valueString, category, importer] = parts.map(p => p.trim());
@@ -141,6 +144,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
         } else {
             if (lines.length <= 3) return transactions;
             for (let i = 3; i < lines.length; i++) {
+                const line = lines[i]; // CORREÇÃO: A variável 'line' estava em falta
                 const parts = line.split(';');
                 if (parts.length < 4) continue;
                 const [dateString, description, , valueString] = parts.map(p => p.trim());
@@ -167,8 +171,12 @@ const FinanceTracker = ({ auth, db, userId }) => {
             const parsedTransactions = parseCsvText(event.target.result, isClassifiedImport);
             if (parsedTransactions.length > 0) {
                 const transactionsCollection = collection(db, `users/${userId}/transactions`);
+                const classificationsCollection = collection(db, `users/${userId}/classifications`);
                 for (const transaction of parsedTransactions) {
                     await addDoc(transactionsCollection, { ...transaction, importer: transaction.importer || importer });
+                    if (transaction.category) {
+                        await setDoc(doc(classificationsCollection, transaction.description), { category: transaction.category });
+                    }
                 }
                 setParsingMessage({ message: `Sucesso! ${parsedTransactions.length} transações importadas.`, type: "success" });
             } else {
@@ -181,7 +189,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
     };
 
     const parseC6PdfText = (text) => {
-        // This is a simplified parser and might need adjustments for different PDF layouts.
         const transactions = [];
         const lines = text.split('\n');
         const dateRegex = /^(\d{2}\/\d{2})/;
@@ -192,9 +199,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
             if (dateRegex.test(line)) {
                 try {
                     const dateParts = line.match(dateRegex);
+                    if (!dateParts) continue;
                     const [day, month] = dateParts[0].split('/');
-                    const description = lines[i+1].trim();
-                    const valueString = lines[i+2].trim();
+                    const description = lines[i+1]?.trim() || 'Sem descrição';
+                    const valueString = lines[i+2]?.trim() || 'R$ 0,00';
                     const amount = parseFloat(valueString.replace('R$', '').replace(/\./g, '').replace(',', '.'));
                     
                     if (!isNaN(amount)) {
@@ -230,7 +238,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                fullText += textContent.items.map(item => item.str).join(' ');
+                fullText += textContent.items.map(item => item.str).join('\n');
             }
     
             const parsedTransactions = parseC6PdfText(fullText);
@@ -425,7 +433,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                         <p className="font-medium">{t.description}</p>
                                         <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
                                         <div className="mt-1 flex items-center gap-2">
-                                            <span className={`text-xs px-2 py-1 rounded-full text-white ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>
+                                            {t.importer && <span className={`text-xs px-2 py-1 rounded-full text-white ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>}
                                             <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, t.description, e.target.value)} className="text-xs rounded border-gray-300">
                                                 <option value="">Classificar</option>
                                                 {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => ( <option key={cat} value={cat}>{cat}</option> ))}
@@ -446,7 +454,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={barChartData}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
+                                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
                                 <YAxis />
                                 <Tooltip formatter={(value) => formatCurrency(value)} />
                                 <Legend />
