@@ -18,6 +18,16 @@ const LoadingScreen = () => (
     </div>
 );
 
+const ErrorScreen = ({ message }) => (
+  <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+    <div className="bg-white p-8 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-red-600 mb-4">Erro</h2>
+      <p className="text-gray-700">{message}</p>
+      <p className="text-sm text-gray-500 mt-2">Verifique o console para mais detalhes</p>
+    </div>
+  </div>
+);
+
 // --- TELA PRINCIPAL DO APP DE FINANÇAS ---
 const FinanceTracker = ({ auth, db, userId }) => {
     const [transactions, setTransactions] = useState([]);
@@ -92,9 +102,13 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                 <li key={t.id} className="py-4 flex justify-between items-center">
                                     <div>
                                         <p className="font-medium">{t.description}</p>
-                                        <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
+                                        <p className="text-sm text-gray-500">
+                                          {t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('pt-BR') : 'Data inválida'}
+                                        </p>
                                     </div>
-                                    <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
+                                    <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+                                      {formatCurrency(t.amount)}
+                                    </span>
                                 </li>
                             ))}
                         </ul>
@@ -163,7 +177,6 @@ function App() {
 
     useEffect(() => {
         try {
-            // CORREÇÃO DEFINITIVA: Montar o objeto a partir de variáveis individuais
             const firebaseConfig = {
                 apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
                 authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -174,36 +187,34 @@ function App() {
                 measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
             };
             
-            // Verifica se as chaves foram carregadas
-            if (!firebaseConfig.apiKey) {
-                console.error("Chaves do Firebase não foram carregadas. Verifique as variáveis de ambiente na Vercel.");
-                setView('auth'); // Mostra a tela de login, mas a inicialização falhará
-                return;
+            // Verifica se todas as variáveis estão definidas
+            const isValidConfig = Object.values(firebaseConfig).every(value => !!value);
+            
+            if (!isValidConfig) {
+                throw new Error("Configuração do Firebase incompleta");
             }
 
             const firebaseApp = initializeApp(firebaseConfig);
             const firebaseAuth = getAuth(firebaseApp);
             const firestoreDb = getFirestore(firebaseApp);
+            
             setDb(firestoreDb);
             setAuth(firebaseAuth);
 
             const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-                if (user) {
-                    setUserId(user.uid);
-                    setView('app');
-                } else {
-                    setUserId(null);
-                    setView('auth');
-                }
+                setUserId(user ? user.uid : null);
+                setView(user ? 'app' : 'auth');
             });
+
             return () => unsubscribe();
-        } catch (e) {
-            console.error("Erro na inicialização do Firebase:", e);
-            setView('auth');
+        } catch (error) {
+            console.error("Erro na inicialização do Firebase:", error);
+            setView('error');
         }
     }, []);
 
     if (view === 'loading') return <LoadingScreen />;
+    if (view === 'error') return <ErrorScreen message="Erro de configuração. Verifique as variáveis de ambiente." />;
     if (view === 'auth') return <AuthScreen auth={auth} />;
     if (view === 'app') return <FinanceTracker auth={auth} db={db} userId={userId} />;
     
@@ -211,4 +222,3 @@ function App() {
 }
 
 export default App;
-
