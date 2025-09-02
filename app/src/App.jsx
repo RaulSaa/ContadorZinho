@@ -44,6 +44,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [type, setType] = useState('receita');
     const [manualDate, setManualDate] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isAddTransactionPopupOpen, setIsAddTransactionPopupOpen] = useState(false);
     const [isResponsiblePopupOpen, setIsResponsiblePopupOpen] = useState(false);
     const [parsingMessage, setParsingMessage] = useState({ message: '', type: '' });
 
@@ -85,13 +86,22 @@ const FinanceTracker = ({ auth, db, userId }) => {
         };
     }, [db, userId, knownClassifications]);
 
+    const handleAddTransactionClick = () => {
+        if (!description || !amount || !manualDate) {
+            setParsingMessage({ message: "Por favor, preencha todos os campos do formulário.", type: 'error' });
+            return;
+        }
+        setIsResponsiblePopupOpen(true);
+    };
+
     const addTransaction = (e, responsible) => {
         e.preventDefault();
-        if (!description || !amount || !manualDate) return setParsingMessage({ message: "Por favor, preencha todos os campos.", type: 'error' });
         const data = { description, amount: parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate) };
         addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
             setParsingMessage({ message: "Transação adicionada com sucesso!", type: 'success' });
-            setDescription(''); setAmount(''); setManualDate(''); setIsResponsiblePopupOpen(false);
+            setDescription(''); setAmount(''); setManualDate(''); 
+            setIsResponsiblePopupOpen(false);
+            setIsAddTransactionPopupOpen(false);
         });
     };
     
@@ -112,7 +122,30 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
     const parseCsvText = (text, isClassified = false) => { /* ... sua lógica de CSV ... */ return []; };
     const handleCsvUpload = async () => { /* ... sua lógica de CSV ... */ };
-    const exportClassifiedData = () => { /* ... sua lógica de exportação ... */ };
+    
+    const exportClassifiedData = () => {
+        const header = "Data;Descrição;Tipo;Valor;Categoria;Importador";
+        const csvRows = [header];
+        filteredTransactions.forEach(t => {
+            const date = t.timestamp?.toDate().toLocaleDateString('pt-BR') || '';
+            const description = `"${(t.description || '').replace(/"/g, '""')}"`;
+            const type = t.type || '';
+            const amount = t.amount?.toString().replace('.', ',') || '0,00';
+            const category = t.category || '';
+            const importer = t.importer || '';
+            csvRows.push([date, description, type, amount, category, importer].join(';'));
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `lancamentos_classificados_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const filteredTransactions = transactions.filter(t => {
         const transactionDate = t.timestamp?.toDate();
@@ -145,6 +178,29 @@ const FinanceTracker = ({ auth, db, userId }) => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
             <StatusMessage message={parsingMessage.message} type={parsingMessage.type} onClose={() => setParsingMessage({message: '', type: ''})} />
+
+            {isAddTransactionPopupOpen && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg space-y-4">
+                        <h2 className="text-2xl font-bold mb-4">Adicionar Nova Transação</h2>
+                        <form className="space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                            <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Valor" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <select value={type} onChange={(e) => setType(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+                            <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                        </div>
+                        <div className="flex justify-end gap-4">
+                            <button type="button" onClick={() => setIsAddTransactionPopupOpen(false)} className="py-2 px-4 rounded-md text-sm font-medium bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                            <button type="button" onClick={handleAddTransactionClick} className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Avançar</button>
+                        </div>
+                        </form>
+                    </div>
+                 </div>
+            )}
+
             {isResponsiblePopupOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                   <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
@@ -153,7 +209,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                       <button onClick={(e) => addTransaction(e, 'Raul')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Raul</button>
                       <button onClick={(e) => addTransaction(e, 'Karol')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Karol</button>
                     </div>
-                    <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Cancelar</button>
+                    <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Voltar</button>
                   </div>
                 </div>
             )}
@@ -207,19 +263,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
                            </div>
                         </section>
 
-                        <section className="bg-white p-6 rounded-xl shadow-lg">
-                          <h2 className="text-2xl font-bold mb-4">Adicionar Nova Transação</h2>
-                          <form className="space-y-4">
-                            <div className="flex flex-col sm:flex-row gap-4">
-                              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                              <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Valor" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                            <div className="flex flex-col sm:flex-row gap-4">
-                              <select value={type} onChange={(e) => setType(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
-                              <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                            <button type="button" onClick={() => setIsResponsiblePopupOpen(true)} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Adicionar Transação</button>
-                          </form>
+                        <section className="bg-white p-6 rounded-xl shadow-lg text-center">
+                           <button onClick={() => setIsAddTransactionPopupOpen(true)} className="w-full md:w-auto py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                             Adicionar Nova Transação
+                           </button>
                         </section>
                         
                         <section className="bg-white p-6 rounded-xl shadow-lg">
@@ -256,17 +303,17 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                     <div>
                                         <p className="font-medium">{t.description}</p>
                                         <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <select value={t.importer || ''} onChange={(e) => classifyTransaction(t.id, 'importer', e.target.value)} className="text-xs rounded border-gray-300">
+                                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                            <select value={t.importer || ''} onChange={(e) => classifyTransaction(t.id, 'importer', e.target.value)} className="text-xs rounded border-gray-300 p-1">
                                                 <option value="">Responsável</option>
                                                 <option value="Raul">Raul</option>
                                                 <option value="Karol">Karol</option>
                                             </select>
-                                            <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300">
+                                            <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300 p-1">
                                                 <option value="">Classificar</option>
                                                 {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => ( <option key={cat} value={cat}>{cat}</option> ))}
                                             </select>
-                                            <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs">Apagar</button>
+                                            <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1">Apagar</button>
                                         </div>
                                     </div>
                                     <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
@@ -279,11 +326,11 @@ const FinanceTracker = ({ auth, db, userId }) => {
                 {activeTab === 'graficos' && (
                     <section className="bg-white p-6 rounded-xl shadow-lg">
                         <h2 className="text-2xl font-bold mb-4">Total por Categoria</h2>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={barChartData}>
+                        <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={barChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} interval={0}/>
-                                <YAxis />
+                                <XAxis type="number" />
+                                <YAxis type="category" dataKey="name" width={150} />
                                 <Tooltip formatter={(value) => formatCurrency(value)} />
                                 <Legend />
                                 <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
