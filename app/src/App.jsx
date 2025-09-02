@@ -47,10 +47,8 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [isResponsiblePopupOpen, setIsResponsiblePopupOpen] = useState(false);
     const [parsingMessage, setParsingMessage] = useState({ message: '', type: '' });
 
-    // Estados para CSV, PDF e funcionalidades extra
+    // Estados para CSV e funcionalidades extra
     const csvInputRef = useRef(null);
-    const pdfInputRefC6 = useRef(null);
-    const [isPdfJsLoaded, setIsPdfJsLoaded] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
     const [isClassifiedImport, setIsClassifiedImport] = useState(false);
     const [importer, setImporter] = useState('');
@@ -63,22 +61,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
     const expenseCategories = ["Aluguer", "Cuidados Pessoais", "Casa", "Plano de Saúde", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Lanche", "Transporte", "Eletricidade", "Supermercado", "Outros", "Animais de Estimação", "Raulzinho", "Poupanças", "Streamings"].sort();
     const revenueCategories = ["13º", "Bónus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
-
-    // Carregar a biblioteca PDF.js dinamicamente
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js';
-        script.onload = () => {
-            if (window['pdfjs-dist/build/pdf']) {
-                window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
-                setIsPdfJsLoaded(true);
-            }
-        };
-        document.body.appendChild(script);
-        return () => {
-            document.body.removeChild(script);
-        };
-    }, []);
 
     useEffect(() => {
         if (!db || !userId) return;
@@ -131,7 +113,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
         if (isClassified) {
             if (lines.length <= 1) return transactions;
             for (let i = 1; i < lines.length; i++) {
-                const line = lines[i]; // CORREÇÃO: A variável 'line' estava em falta
+                const line = lines[i];
                 const parts = line.split(';');
                 if (parts.length < 6) continue;
                 const [dateString, description, type, valueString, category, importer] = parts.map(p => p.trim());
@@ -144,7 +126,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
         } else {
             if (lines.length <= 3) return transactions;
             for (let i = 3; i < lines.length; i++) {
-                const line = lines[i]; // CORREÇÃO: A variável 'line' estava em falta
+                const line = lines[i];
                 const parts = line.split(';');
                 if (parts.length < 4) continue;
                 const [dateString, description, , valueString] = parts.map(p => p.trim());
@@ -186,75 +168,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
             csvInputRef.current.value = null;
         };
         reader.readAsText(file);
-    };
-
-    const parseC6PdfText = (text) => {
-        const transactions = [];
-        const lines = text.split('\n');
-        const dateRegex = /^(\d{2}\/\d{2})/;
-        let currentYear = new Date().getFullYear();
-    
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (dateRegex.test(line)) {
-                try {
-                    const dateParts = line.match(dateRegex);
-                    if (!dateParts) continue;
-                    const [day, month] = dateParts[0].split('/');
-                    const description = lines[i+1]?.trim() || 'Sem descrição';
-                    const valueString = lines[i+2]?.trim() || 'R$ 0,00';
-                    const amount = parseFloat(valueString.replace('R$', '').replace(/\./g, '').replace(',', '.'));
-                    
-                    if (!isNaN(amount)) {
-                        transactions.push({
-                            timestamp: new Date(currentYear, parseInt(month) - 1, parseInt(day)),
-                            description: description,
-                            amount: amount,
-                            type: amount >= 0 ? 'receita' : 'despesa',
-                        });
-                    }
-                } catch (e) {
-                    console.warn("Could not parse PDF line:", line);
-                }
-            }
-        }
-        return transactions;
-    };
-    
-    const handleC6PdfUpload = async () => {
-        const file = pdfInputRefC6.current.files[0];
-        if (!file) return setParsingMessage({ message: "Por favor, selecione um ficheiro PDF.", type: "error" });
-        if (!importer) return setParsingMessage({ message: "Por favor, selecione quem está a importar.", type: "error" });
-        if (!isPdfJsLoaded) return setParsingMessage({ message: "Biblioteca de PDF ainda a carregar, tente novamente.", type: "info" });
-    
-        setIsParsing(true);
-        setParsingMessage({ message: "A ler o extrato PDF...", type: "info" });
-    
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const pdfjsLib = window['pdfjs-dist/build/pdf'];
-            const pdf = await pdfjsLib.getDocument(event.target.result).promise;
-            let fullText = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                fullText += textContent.items.map(item => item.str).join('\n');
-            }
-    
-            const parsedTransactions = parseC6PdfText(fullText);
-            if (parsedTransactions.length > 0) {
-                const transactionsCollection = collection(db, `users/${userId}/transactions`);
-                for (const transaction of parsedTransactions) {
-                    await addDoc(transactionsCollection, { ...transaction, importer });
-                }
-                setParsingMessage({ message: `Sucesso! ${parsedTransactions.length} transações importadas do PDF.`, type: "success" });
-            } else {
-                setParsingMessage({ message: "Nenhuma transação encontrada no PDF. O formato pode não ser suportado.", type: "error" });
-            }
-            setIsParsing(false);
-            pdfInputRefC6.current.value = null;
-        };
-        reader.readAsArrayBuffer(file);
     };
 
     const exportClassifiedData = () => {
@@ -389,31 +302,20 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
                          <section className="bg-white p-6 rounded-xl shadow-lg">
                           <h2 className="text-2xl font-bold mb-4">Importar Extratos</h2>
-                            <div className="flex flex-col sm:flex-row gap-4">
-                               <div className="flex-1 space-y-4 border p-4 rounded-md">
-                                 <h3 className="text-lg font-semibold text-gray-800">CSV</h3>
-                                 <div className="flex items-center gap-2">
-                                   <input type="checkbox" id="importClassified" checked={isClassifiedImport} onChange={(e) => setIsClassifiedImport(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded"/>
-                                   <label htmlFor="importClassified" className="text-sm text-gray-600">Importar ficheiro já classificado</label>
-                                 </div>
-                                 {!isClassifiedImport && (
-                                     <div className="flex gap-4">
-                                       <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
-                                       <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
-                                     </div>
-                                 )}
-                                 <input type="file" ref={csvInputRef} accept=".csv" className="block w-full text-sm"/>
-                                 <button onClick={handleCsvUpload} disabled={isParsing} className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar CSV'}</button>
-                               </div>
-                               <div className="flex-1 space-y-4 border p-4 rounded-md">
-                                 <h3 className="text-lg font-semibold text-gray-800">PDF (C6 Bank)</h3>
+                            <div className="flex-1 space-y-4 border p-4 rounded-md">
+                              <h3 className="text-lg font-semibold text-gray-800">CSV</h3>
+                              <div className="flex items-center gap-2">
+                                <input type="checkbox" id="importClassified" checked={isClassifiedImport} onChange={(e) => setIsClassifiedImport(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded"/>
+                                <label htmlFor="importClassified" className="text-sm text-gray-600">Importar ficheiro já classificado</label>
+                              </div>
+                              {!isClassifiedImport && (
                                   <div className="flex gap-4">
-                                      <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
-                                      <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
+                                    <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
+                                    <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
                                   </div>
-                                 <input type="file" ref={pdfInputRefC6} accept=".pdf" className="block w-full text-sm"/>
-                                 <button onClick={handleC6PdfUpload} disabled={isParsing || !isPdfJsLoaded} className="w-full py-2 px-4 rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar PDF (C6)'}</button>
-                               </div>
+                              )}
+                              <input type="file" ref={csvInputRef} accept=".csv" className="block w-full text-sm"/>
+                              <button onClick={handleCsvUpload} disabled={isParsing} className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar CSV'}</button>
                             </div>
                         </section>
 
