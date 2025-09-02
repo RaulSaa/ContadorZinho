@@ -416,16 +416,16 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                 <button onClick={() => setIsFixedCostFilterOpen(true)} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700">Filtrar</button>
                             </div>
                             <ResponsiveContainer width="100%" height={300}>
-                                 <BarChart data={monthlyFixedCostChartData}>
+                                 <LineChart data={monthlyFixedCostChartData}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="name" />
                                     <YAxis tickFormatter={formatCurrency}/>
                                     <Tooltip formatter={(value) => formatCurrency(value)} />
                                     <Legend />
                                     {selectedFixedCosts.map((cost, index) => (
-                                        <Bar key={cost} dataKey={cost} stackId="a" fill={fixedCostColors[index % fixedCostColors.length]} />
+                                        <Line key={cost} type="monotone" dataKey={cost} name={cost} stroke={fixedCostColors[index % fixedCostColors.length]} strokeWidth={2} />
                                     ))}
-                                </BarChart>
+                                </LineChart>
                             </ResponsiveContainer>
                         </section>
                         <section className="bg-white p-6 rounded-xl shadow-lg">
@@ -434,7 +434,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                 <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis type="number" tickFormatter={formatCurrency}/>
-                                    <YAxis type="category" dataKey="name" width={100} interval={0} />
+                                    <YAxis type="category" dataKey="name" width={100} interval={0} textAnchor="start" />
                                     <Tooltip formatter={(value) => formatCurrency(value)} />
                                     <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
                                 </BarChart>
