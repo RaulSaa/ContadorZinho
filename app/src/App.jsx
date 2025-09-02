@@ -59,6 +59,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [endDate, setEndDate] = useState('');
     const [activeTab, setActiveTab] = useState('lancamentos');
 
+    // Estados para o filtro do gráfico de gastos fixos
+    const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
+    const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
+
     const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
     const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
@@ -147,7 +151,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
         document.body.removeChild(link);
     };
 
-    // CORREÇÃO: Cria uma lista base para os totais, aplicando apenas os filtros principais.
     const transactionsForSummary = transactions.filter(t => {
         const transactionDate = t.timestamp?.toDate();
         if (!transactionDate) return false;
@@ -159,19 +162,66 @@ const FinanceTracker = ({ auth, db, userId }) => {
         return true;
     });
 
-    // CORREÇÃO: Cria uma segunda lista para o histórico, aplicando os filtros de classificação sobre a lista base.
     const filteredHistoryTransactions = transactionsForSummary.filter(t => {
         if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
         if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
         return true;
     });
 
-    // CORREÇÃO: Calcula os totais a partir da lista base, não da lista do histórico.
     const totalRevenue = transactionsForSummary.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
     const totalBalance = totalRevenue + totalExpense;
     
-    const barChartData = [];
+    // --- CÁLCULOS PARA GRÁFICOS ---
+    const barChartData = Object.entries(
+        transactionsForSummary
+            .filter(t => t.type === 'despesa' && t.category)
+            .reduce((acc, t) => {
+                if (!acc[t.category]) acc[t.category] = 0;
+                acc[t.category] += Math.abs(t.amount);
+                return acc;
+            }, {})
+    ).map(([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total);
+
+    const monthlyData = transactionsForSummary.reduce((acc, t) => {
+        if (!t.timestamp) return acc;
+        const monthYear = new Intl.DateTimeFormat('pt-BR', { year: '2-digit', month: 'short' }).format(t.timestamp.toDate());
+        if (!acc[monthYear]) {
+            acc[monthYear] = { name: monthYear, Receitas: 0, Despesas: 0 };
+        }
+        if (t.type === 'receita') {
+            acc[monthYear].Receitas += t.amount;
+        } else {
+            acc[monthYear].Despesas += Math.abs(t.amount);
+        }
+        return acc;
+    }, {});
+    const monthlyChartData = Object.values(monthlyData).reverse();
+
+    const monthlyFixedCostData = transactionsForSummary
+        .filter(t => t.type === 'despesa' && selectedFixedCosts.includes(t.category))
+        .reduce((acc, t) => {
+            if (!t.timestamp) return acc;
+            const monthYear = new Intl.DateTimeFormat('pt-BR', { year: '2-digit', month: 'short' }).format(t.timestamp.toDate());
+            if (!acc[monthYear]) {
+                acc[monthYear] = { name: monthYear };
+            }
+            if (!acc[monthYear][t.category]) {
+                acc[monthYear][t.category] = 0;
+            }
+            acc[monthYear][t.category] += Math.abs(t.amount);
+            return acc;
+        }, {});
+    const monthlyFixedCostChartData = Object.values(monthlyFixedCostData).reverse();
+
+    const handleFixedCostSelection = (category) => {
+        setSelectedFixedCosts(prev => 
+            prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
+        );
+    };
+
+    const fixedCostColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+
     const unclassifiedCount = transactions.filter(t => !t.category || t.category === '').length;
     const totalRaul = transactions.filter(t => t.importer === 'Raul').length;
     const classifiedRaul = transactions.filter(t => t.importer === 'Raul' && t.category && t.category !== '').length;
@@ -185,8 +235,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
             <StatusMessage message={parsingMessage.message} type={parsingMessage.type} onClose={() => setParsingMessage({message: '', type: ''})} />
-
-            {isAddTransactionPopupOpen && (
+             {isAddTransactionPopupOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg space-y-4">
                         <h2 className="text-2xl font-bold mb-4">Adicionar Nova Transação</h2>
@@ -207,8 +256,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                     </div>
                  </div>
             )}
-
-            {isResponsiblePopupOpen && (
+             {isResponsiblePopupOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                   <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
                     <h3 className="text-xl font-bold">Quem é o responsável?</h3>
@@ -219,6 +267,29 @@ const FinanceTracker = ({ auth, db, userId }) => {
                     <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Voltar</button>
                   </div>
                 </div>
+            )}
+             {isFixedCostFilterOpen && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
+                        <h3 className="text-xl font-bold mb-4">Selecionar Gastos Fixos</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                            {expenseCategories.map(cat => (
+                                <label key={cat} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedFixedCosts.includes(cat)}
+                                        onChange={() => handleFixedCostSelection(cat)}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-sm">{cat}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <button onClick={() => setIsFixedCostFilterOpen(false)} className="mt-6 w-full py-2 px-4 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                            Fechar
+                        </button>
+                    </div>
+                 </div>
             )}
             <div className="max-w-4xl mx-auto space-y-8">
                 <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
@@ -231,7 +302,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
                         <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 w-full sm:w-auto">Sair</button>
                     </div>
                 </header>
-
                 <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
                   <h2 className="text-xl font-bold">Progresso de Classificação</h2>
                   <div className="space-y-2">
@@ -243,7 +313,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-400 h-2.5 rounded-full" style={{ width: `${raulProgress}%` }}></div></div>
                   </div>
                 </div>
-
                 <div className="flex justify-center gap-4 bg-white p-2 rounded-xl shadow-lg">
                     <button onClick={() => setActiveTab('lancamentos')} className={`py-2 px-4 rounded-md text-sm font-medium transition ${activeTab === 'lancamentos' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-200'}`}>
                         Lançamentos
@@ -252,10 +321,9 @@ const FinanceTracker = ({ auth, db, userId }) => {
                         Gráficos
                     </button>
                 </div>
-
                 {activeTab === 'lancamentos' && (
                     <>
-                        <section className="grid md:grid-cols-3 gap-6">
+                         <section className="grid md:grid-cols-3 gap-6">
                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
                              <h2 className="text-lg font-semibold text-gray-600">Receita Total</h2>
                              <p className="mt-2 text-3xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
@@ -327,26 +395,57 @@ const FinanceTracker = ({ auth, db, userId }) => {
                 )}
                 
                 {activeTab === 'graficos' && (
-                    <section className="bg-white p-6 rounded-xl shadow-lg">
-                        <h2 className="text-2xl font-bold mb-4">Total por Categoria</h2>
-                        <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={barChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" />
-                                <YAxis type="category" dataKey="name" width={150} />
-                                <Tooltip formatter={(value) => formatCurrency(value)} />
-                                <Legend />
-                                <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </section>
+                    <div className="space-y-8">
+                        <section className="bg-white p-6 rounded-xl shadow-lg">
+                            <h2 className="text-2xl font-bold mb-4">Receita vs. Despesa Mensal</h2>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={monthlyChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis tickFormatter={formatCurrency} />
+                                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="Receitas" stroke="#22c55e" strokeWidth={2} />
+                                    <Line type="monotone" dataKey="Despesas" stroke="#ef4444" strokeWidth={2} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </section>
+                        <section className="bg-white p-6 rounded-xl shadow-lg">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">Gastos Fixos Mensais</h2>
+                                <button onClick={() => setIsFixedCostFilterOpen(true)} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700">Filtrar</button>
+                            </div>
+                            <ResponsiveContainer width="100%" height={300}>
+                                 <BarChart data={monthlyFixedCostChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis tickFormatter={formatCurrency}/>
+                                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                                    <Legend />
+                                    {selectedFixedCosts.map((cost, index) => (
+                                        <Bar key={cost} dataKey={cost} stackId="a" fill={fixedCostColors[index % fixedCostColors.length]} />
+                                    ))}
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </section>
+                        <section className="bg-white p-6 rounded-xl shadow-lg">
+                            <h2 className="text-2xl font-bold mb-4">Total por Categoria</h2>
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" tickFormatter={formatCurrency}/>
+                                    <YAxis type="category" dataKey="name" width={100} interval={0} />
+                                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                                    <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </section>
+                    </div>
                 )}
             </div>
         </div>
     );
 };
-
-
 // --- TELA DE LOGIN E REGISTO ---
 const AuthScreen = ({ auth }) => {
     const [email, setEmail] = useState('');
@@ -395,8 +494,6 @@ const AuthScreen = ({ auth }) => {
         </div>
     );
 };
-
-
 // --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
 function App() {
     const [db, setDb] = useState(null);
