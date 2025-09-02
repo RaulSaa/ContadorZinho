@@ -47,8 +47,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [isResponsiblePopupOpen, setIsResponsiblePopupOpen] = useState(false);
     const [parsingMessage, setParsingMessage] = useState({ message: '', type: '' });
 
-    // Estados para CSV e funcionalidades extra
+    // Estados para CSV, PDF e funcionalidades extra
     const csvInputRef = useRef(null);
+    const pdfInputRefC6 = useRef(null);
+    const [isPdfJsLoaded, setIsPdfJsLoaded] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
     const [isClassifiedImport, setIsClassifiedImport] = useState(false);
     const [importer, setImporter] = useState('');
@@ -62,9 +64,22 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const expenseCategories = ["Aluguer", "Cuidados Pessoais", "Casa", "Plano de Saúde", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Lanche", "Transporte", "Eletricidade", "Supermercado", "Outros", "Animais de Estimação", "Raulzinho", "Poupanças", "Streamings"].sort();
     const revenueCategories = ["13º", "Bónus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
+    // Carregar a biblioteca PDF.js dinamicamente
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js';
+        script.onload = () => {
+            window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
+            setIsPdfJsLoaded(true);
+        };
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
+
     useEffect(() => {
         if (!db || !userId) return;
-
         const classificationsCollection = collection(db, `users/${userId}/classifications`);
         const unsubscribeClassifications = onSnapshot(classificationsCollection, (snapshot) => {
             const classifications = {};
@@ -75,13 +90,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
         const transactionsCollection = collection(db, `users/${userId}/transactions`);
         const unsubscribeTransactions = onSnapshot(query(transactionsCollection), (snapshot) => {
             let fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Auto-classificar com base no conhecimento existente
-            fetched = fetched.map(t => {
-                if (!t.category && knownClassifications[t.description]) {
-                    return { ...t, category: knownClassifications[t.description] };
-                }
-                return t;
-            });
+            fetched = fetched.map(t => ({ ...t, category: t.category || knownClassifications[t.description] || null }));
             fetched.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
             setTransactions(fetched);
             setLoading(false);
@@ -91,7 +100,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
             unsubscribeClassifications();
             unsubscribeTransactions();
         };
-    }, [db, userId]);
+    }, [db, userId, knownClassifications]);
 
     const addTransaction = (e, responsible) => {
         e.preventDefault();
@@ -104,12 +113,8 @@ const FinanceTracker = ({ auth, db, userId }) => {
     };
     
     const classifyTransaction = async (transactionId, description, category) => {
-        const transDocRef = doc(db, `users/${userId}/transactions`, transactionId);
-        await setDoc(transDocRef, { category: category }, { merge: true });
-
-        const classDocRef = doc(db, `users/${userId}/classifications`, description);
-        await setDoc(classDocRef, { category: category });
-        setParsingMessage({ message: "Transação classificada!", type: 'success' });
+        await setDoc(doc(db, `users/${userId}/transactions`, transactionId), { category }, { merge: true });
+        await setDoc(doc(db, `users/${userId}/classifications`, description), { category });
     };
 
     const deleteTransaction = async (transactionId) => {
@@ -117,16 +122,152 @@ const FinanceTracker = ({ auth, db, userId }) => {
         setParsingMessage({ message: "Transação apagada.", type: 'success' });
     };
 
-    const handleCsvUpload = async () => {
-        // ... (código de importação de CSV)
+    const parseCsvText = (text, isClassified = false) => {
+        const transactions = [];
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+    
+        if (isClassified) {
+            if (lines.length <= 1) return transactions;
+            for (let i = 1; i < lines.length; i++) {
+                const parts = line.split(';');
+                if (parts.length < 6) continue;
+                const [dateString, description, type, valueString, category, importer] = parts.map(p => p.trim());
+                const amount = parseFloat(valueString.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.'));
+                if (!isNaN(amount)) {
+                    const [day, month, year] = dateString.split('/');
+                    transactions.push({ timestamp: new Date(`${year}-${month}-${day}`), description, amount, type, category, importer });
+                }
+            }
+        } else {
+            if (lines.length <= 3) return transactions;
+            for (let i = 3; i < lines.length; i++) {
+                const parts = line.split(';');
+                if (parts.length < 4) continue;
+                const [dateString, description, , valueString] = parts.map(p => p.trim());
+                const amount = parseFloat(valueString.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.'));
+                if (!isNaN(amount)) {
+                    const [day, month, year] = dateString.split('-');
+                    transactions.push({ timestamp: new Date(`${year}-${month}-${day}`), description, amount, type: amount >= 0 ? 'receita' : 'despesa' });
+                }
+            }
+        }
+        return transactions;
     };
 
-    // ... (Cálculos para os gráficos, filtros, etc.)
+    const handleCsvUpload = async () => {
+        const file = csvInputRef.current.files[0];
+        if (!file) return setParsingMessage({ message: "Por favor, selecione um ficheiro CSV.", type: "error" });
+        if (!isClassifiedImport && !importer) return setParsingMessage({ message: "Por favor, selecione quem está a importar.", type: "error" });
+    
+        setIsParsing(true);
+        setParsingMessage({ message: "A ler o extrato CSV...", type: "info" });
+    
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const parsedTransactions = parseCsvText(event.target.result, isClassifiedImport);
+            if (parsedTransactions.length > 0) {
+                const transactionsCollection = collection(db, `users/${userId}/transactions`);
+                for (const transaction of parsedTransactions) {
+                    await addDoc(transactionsCollection, { ...transaction, importer: transaction.importer || importer });
+                }
+                setParsingMessage({ message: `Sucesso! ${parsedTransactions.length} transações importadas.`, type: "success" });
+            } else {
+                setParsingMessage({ message: "Nenhuma transação encontrada no ficheiro CSV.", type: "error" });
+            }
+            setIsParsing(false);
+            csvInputRef.current.value = null;
+        };
+        reader.readAsText(file);
+    };
+
+    const parseC6PdfText = (text) => {
+        // This is a simplified parser and might need adjustments for different PDF layouts.
+        const transactions = [];
+        const lines = text.split('\n');
+        const dateRegex = /^(\d{2}\/\d{2})/;
+        let currentYear = new Date().getFullYear();
+    
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (dateRegex.test(line)) {
+                try {
+                    const dateParts = line.match(dateRegex);
+                    const [day, month] = dateParts[0].split('/');
+                    const description = lines[i+1].trim();
+                    const valueString = lines[i+2].trim();
+                    const amount = parseFloat(valueString.replace('R$', '').replace(/\./g, '').replace(',', '.'));
+                    
+                    if (!isNaN(amount)) {
+                        transactions.push({
+                            timestamp: new Date(currentYear, parseInt(month) - 1, parseInt(day)),
+                            description: description,
+                            amount: amount,
+                            type: amount >= 0 ? 'receita' : 'despesa',
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Could not parse PDF line:", line);
+                }
+            }
+        }
+        return transactions;
+    };
+    
+    const handleC6PdfUpload = async () => {
+        const file = pdfInputRefC6.current.files[0];
+        if (!file) return setParsingMessage({ message: "Por favor, selecione um ficheiro PDF.", type: "error" });
+        if (!importer) return setParsingMessage({ message: "Por favor, selecione quem está a importar.", type: "error" });
+        if (!isPdfJsLoaded) return setParsingMessage({ message: "Biblioteca de PDF ainda a carregar, tente novamente.", type: "info" });
+    
+        setIsParsing(true);
+        setParsingMessage({ message: "A ler o extrato PDF...", type: "info" });
+    
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const pdfjsLib = window['pdfjs-dist/build/pdf'];
+            const pdf = await pdfjsLib.getDocument(event.target.result).promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ');
+            }
+    
+            const parsedTransactions = parseC6PdfText(fullText);
+            if (parsedTransactions.length > 0) {
+                const transactionsCollection = collection(db, `users/${userId}/transactions`);
+                for (const transaction of parsedTransactions) {
+                    await addDoc(transactionsCollection, { ...transaction, importer });
+                }
+                setParsingMessage({ message: `Sucesso! ${parsedTransactions.length} transações importadas do PDF.`, type: "success" });
+            } else {
+                setParsingMessage({ message: "Nenhuma transação encontrada no PDF. O formato pode não ser suportado.", type: "error" });
+            }
+            setIsParsing(false);
+            pdfInputRefC6.current.value = null;
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    const exportClassifiedData = () => {
+        const header = "Data;Descrição;Tipo;Valor;Categoria;Importador";
+        const csvRows = [header, ...transactions.map(t =>
+            `${t.timestamp?.toDate().toLocaleDateString('pt-BR') || ''};${t.description || ''};${t.type || ''};${t.amount?.toString().replace('.', ',') || '0,00'};${t.category || ''};${t.importer || ''}`
+        )];
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lancamentos_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const filteredTransactions = transactions.filter(t => {
         const transactionDate = t.timestamp?.toDate();
         if (!transactionDate) return false;
-        const start = startDate ? new Date(startDate) : null;
-        const end = endDate ? new Date(endDate) : null;
+        const start = startDate ? new Date(startDate + 'T00:00:00') : null;
+        const end = endDate ? new Date(endDate + 'T23:59:59') : null;
         if (start && transactionDate < start) return false;
         if (end && transactionDate > end) return false;
         if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
@@ -137,17 +278,65 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
     const totalRevenue = filteredTransactions.filter(t => t.type === 'receita').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = filteredTransactions.filter(t => t.type === 'despesa').reduce((sum, t) => sum + t.amount, 0);
+    const totalBalance = totalRevenue + totalExpense;
+    
+    // Cálculos para gráficos
+    const barChartData = Object.entries(
+        filteredTransactions
+            .filter(t => t.type === 'despesa' && t.category)
+            .reduce((acc, t) => {
+                if (!acc[t.category]) acc[t.category] = 0;
+                acc[t.category] += Math.abs(t.amount);
+                return acc;
+            }, {})
+    ).map(([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total);
+
+    const unclassifiedCount = transactions.filter(t => !t.category).length;
+    const totalRaul = transactions.filter(t => t.importer === 'Raul').length;
+    const classifiedRaul = transactions.filter(t => t.importer === 'Raul' && t.category).length;
+    const raulProgress = totalRaul > 0 ? (classifiedRaul / totalRaul) * 100 : 0;
+    const totalKarol = transactions.filter(t => t.importer === 'Karol').length;
+    const classifiedKarol = transactions.filter(t => t.importer === 'Karol' && t.category).length;
+    const karolProgress = totalKarol > 0 ? (classifiedKarol / totalKarol) * 100 : 0;
 
     if (loading) return <LoadingScreen />;
 
     return (
         <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
             <StatusMessage message={parsingMessage.message} type={parsingMessage.type} onClose={() => setParsingMessage({message: '', type: ''})} />
+            {isResponsiblePopupOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                  <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
+                    <h3 className="text-xl font-bold">Quem é o responsável?</h3>
+                    <div className="flex gap-4">
+                      <button onClick={(e) => addTransaction(e, 'Raul')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Raul</button>
+                      <button onClick={(e) => addTransaction(e, 'Karol')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Karol</button>
+                    </div>
+                    <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Cancelar</button>
+                  </div>
+                </div>
+            )}
             <div className="max-w-4xl mx-auto space-y-8">
-                 <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
+                <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center">
                     <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
-                    <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Sair</button>
+                    <div className="flex items-center gap-4">
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-md text-sm"/>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-md text-sm"/>
+                        <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Sair</button>
+                    </div>
                 </header>
+
+                <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
+                  <h2 className="text-xl font-bold">Progresso de Classificação</h2>
+                  <div className="space-y-2">
+                    <p className="text-sm">Karol: {classifiedKarol}/{totalKarol} ({karolProgress.toFixed(0)}%)</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${karolProgress}%` }}></div></div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm">Raul: {classifiedRaul}/{totalRaul} ({raulProgress.toFixed(0)}%)</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-400 h-2.5 rounded-full" style={{ width: `${raulProgress}%` }}></div></div>
+                  </div>
+                </div>
 
                 <div className="flex justify-center gap-4 bg-white p-2 rounded-xl shadow-lg">
                     <button onClick={() => setActiveTab('lancamentos')} className={`py-2 px-4 rounded-md text-sm font-medium transition ${activeTab === 'lancamentos' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-200'}`}>
@@ -160,41 +349,89 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
                 {activeTab === 'lancamentos' && (
                     <>
-                        <section className="grid md:grid-cols-2 gap-6">
+                        <section className="grid md:grid-cols-3 gap-6">
                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
                              <h2 className="text-lg font-semibold text-gray-600">Receita Total</h2>
                              <p className="mt-2 text-3xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
                            </div>
                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
                              <h2 className="text-lg font-semibold text-gray-600">Despesa Total</h2>
-                             <p className="mt-2 text-3xl font-bold text-red-600">{formatCurrency(Math.abs(totalExpense))}</p>
+                             <p className="mt-2 text-3xl font-bold text-red-600">{formatCurrency(totalExpense)}</p>
+                           </div>
+                           <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+                             <h2 className="text-lg font-semibold text-gray-600">Saldo</h2>
+                             <p className={`mt-2 text-3xl font-bold ${totalBalance >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>{formatCurrency(totalBalance)}</p>
                            </div>
                         </section>
 
                         <section className="bg-white p-6 rounded-xl shadow-lg">
                           <h2 className="text-2xl font-bold mb-4">Adicionar Nova Transação</h2>
-                          {/* Formulário de Adicionar Transação aqui */}
+                          <form className="space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4">
+                              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                              <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Valor" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                              <select value={type} onChange={(e) => setType(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+                              <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                            </div>
+                            <button type="button" onClick={() => setIsResponsiblePopupOpen(true)} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Adicionar Transação</button>
+                          </form>
                         </section>
 
                          <section className="bg-white p-6 rounded-xl shadow-lg">
-                          <h2 className="text-2xl font-bold mb-4">Importar CSV</h2>
-                           {/* Funcionalidade de Importar CSV aqui */}
+                          <h2 className="text-2xl font-bold mb-4">Importar Extratos</h2>
+                            <div className="flex flex-col sm:flex-row gap-4">
+                               <div className="flex-1 space-y-4 border p-4 rounded-md">
+                                 <h3 className="text-lg font-semibold text-gray-800">CSV</h3>
+                                 <div className="flex items-center gap-2">
+                                   <input type="checkbox" id="importClassified" checked={isClassifiedImport} onChange={(e) => setIsClassifiedImport(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded"/>
+                                   <label htmlFor="importClassified" className="text-sm text-gray-600">Importar ficheiro já classificado</label>
+                                 </div>
+                                 {!isClassifiedImport && (
+                                     <div className="flex gap-4">
+                                       <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
+                                       <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
+                                     </div>
+                                 )}
+                                 <input type="file" ref={csvInputRef} accept=".csv" className="block w-full text-sm"/>
+                                 <button onClick={handleCsvUpload} disabled={isParsing} className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar CSV'}</button>
+                               </div>
+                               <div className="flex-1 space-y-4 border p-4 rounded-md">
+                                 <h3 className="text-lg font-semibold text-gray-800">PDF (C6 Bank)</h3>
+                                  <div className="flex gap-4">
+                                      <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
+                                      <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
+                                  </div>
+                                 <input type="file" ref={pdfInputRefC6} accept=".pdf" className="block w-full text-sm"/>
+                                 <button onClick={handleC6PdfUpload} disabled={isParsing || !isPdfJsLoaded} className="w-full py-2 px-4 rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar PDF (C6)'}</button>
+                               </div>
+                            </div>
                         </section>
 
                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                            <h2 className="text-2xl font-bold mb-4">Histórico de Transações</h2>
-                            {/* Filtros e Lista de Transações aqui */}
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">Histórico ({unclassifiedCount} por classificar)</h2>
+                                <button onClick={exportClassifiedData} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700">Exportar</button>
+                            </div>
+                             <div className="flex flex-wrap gap-2 mb-4">
+                               <button onClick={() => setClassificationFilter('Todos')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Todos' ? 'bg-gray-600 text-white' : 'bg-gray-200'}`}>Todas</button>
+                               <button onClick={() => setClassificationFilter('Classificados')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Classificados' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Classificadas</button>
+                               <button onClick={() => setClassificationFilter('A Classificar')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'A Classificar' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>A Classificar</button>
+                             </div>
                             {filteredTransactions.map(t => (
                                 <div key={t.id} className="py-4 flex justify-between items-center border-b">
                                     <div>
                                         <p className="font-medium">{t.description}</p>
                                         <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
-                                        <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, t.description, e.target.value)} className="mt-1 text-xs rounded">
-                                            <option value="">Classificar</option>
-                                            {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <span className={`text-xs px-2 py-1 rounded-full text-white ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>
+                                            <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, t.description, e.target.value)} className="text-xs rounded border-gray-300">
+                                                <option value="">Classificar</option>
+                                                {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => ( <option key={cat} value={cat}>{cat}</option> ))}
+                                            </select>
+                                            <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs">Apagar</button>
+                                        </div>
                                     </div>
                                     <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
                                 </div>
@@ -206,11 +443,18 @@ const FinanceTracker = ({ auth, db, userId }) => {
                 {activeTab === 'graficos' && (
                     <section className="bg-white p-6 rounded-xl shadow-lg">
                         <h2 className="text-2xl font-bold mb-4">Gráficos e Análises</h2>
-                        <p className="text-center text-gray-500">A secção de gráficos estará aqui.</p>
-                        {/* Componentes de Gráficos aqui */}
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={barChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip formatter={(value) => formatCurrency(value)} />
+                                <Legend />
+                                <Bar dataKey="total" fill="#8884d8" name="Total por Categoria" />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </section>
                 )}
-
             </div>
         </div>
     );
@@ -219,7 +463,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
 
 // --- TELA DE LOGIN E REGISTO ---
 const AuthScreen = ({ auth }) => {
-    // ... (código da tela de login, sem alterações)
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
@@ -229,28 +472,31 @@ const AuthScreen = ({ auth }) => {
         e.preventDefault();
         setError('');
         try {
-            if (isLogin) await signInWithEmailAndPassword(auth, email, password);
-            else await createUserWithEmailAndPassword(auth, email, password);
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
         } catch (err) {
-            setError(err.message.replace('Firebase: ', ''));
+            setError(err.message.replace('Firebase: ', '').replace('Error ', '').replace(/ \(auth.*\)\.?/, ''));
         }
     };
     
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
             <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
-                <h2 className="text-3xl font-bold text-center mb-6">{isLogin ? 'Login' : 'Registo'}</h2>
+                <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">{isLogin ? 'Login' : 'Registo'}</h2>
                 <form onSubmit={handleAuthAction} className="space-y-6">
                     <div>
-                        <label>Email</label>
-                        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                        <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
                     </div>
                     <div>
-                        <label>Senha</label>
-                        <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha</label>
+                        <input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
                     </div>
                     {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-                    <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                         {isLogin ? 'Entrar' : 'Criar Conta'}
                     </button>
                 </form>
@@ -267,7 +513,6 @@ const AuthScreen = ({ auth }) => {
 
 // --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
 function App() {
-    // ... (código do App principal, sem alterações)
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
@@ -286,16 +531,16 @@ function App() {
             };
             
             if (!firebaseConfig.apiKey) {
-                console.error("Chaves do Firebase não foram carregadas.");
+                console.error("Chaves do Firebase não foram carregadas. Verifique as variáveis de ambiente na Vercel.");
             }
 
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
-            setDb(db);
-            setAuth(auth);
+            const firebaseApp = initializeApp(firebaseConfig);
+            const firebaseAuth = getAuth(firebaseApp);
+            const firestoreDb = getFirestore(firebaseApp);
+            setDb(firestoreDb);
+            setAuth(firebaseAuth);
 
-            onAuthStateChanged(auth, (user) => {
+            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
                 if (user) {
                     setUserId(user.uid);
                     setView('app');
@@ -304,6 +549,7 @@ function App() {
                     setView('auth');
                 }
             });
+            return () => unsubscribe();
         } catch (e) {
             console.error("Erro na inicialização do Firebase:", e);
             setView('auth');
@@ -314,7 +560,7 @@ function App() {
     if (view === 'auth') return <AuthScreen auth={auth} />;
     if (view === 'app') return <FinanceTracker auth={auth} db={db} userId={userId} />;
     
-    return <LoadingScreen />; // Fallback
+    return <LoadingScreen />;
 }
 
 export default App;
