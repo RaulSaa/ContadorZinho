@@ -59,8 +59,8 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [endDate, setEndDate] = useState('');
     const [activeTab, setActiveTab] = useState('lancamentos');
 
-    const expenseCategories = ["Aluguer", "Cuidados Pessoais", "Casa", "Plano de Saúde", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Lanche", "Transporte", "Eletricidade", "Supermercado", "Outros", "Animais de Estimação", "Raulzinho", "Poupanças", "Streamings"].sort();
-    const revenueCategories = ["13º", "Bónus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
+    const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
+    const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
     useEffect(() => {
         if (!db || !userId) return;
