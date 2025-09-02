@@ -304,11 +304,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                         <p className="font-medium">{t.description}</p>
                                         <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
                                         <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                            <select value={t.importer || ''} onChange={(e) => classifyTransaction(t.id, 'importer', e.target.value)} className="text-xs rounded border-gray-300 p-1">
-                                                <option value="">Responsável</option>
-                                                <option value="Raul">Raul</option>
-                                                <option value="Karol">Karol</option>
-                                            </select>
+                                            {t.importer && <span className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>}
                                             <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300 p-1">
                                                 <option value="">Classificar</option>
                                                 {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => ( <option key={cat} value={cat}>{cat}</option> ))}
