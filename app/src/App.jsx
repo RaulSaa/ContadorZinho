@@ -431,10 +431,10 @@ const FinanceTracker = ({ auth, db, userId }) => {
                         <section className="bg-white p-6 rounded-xl shadow-lg">
                             <h2 className="text-2xl font-bold mb-4">Total por Categoria</h2>
                             <ResponsiveContainer width="100%" height={400}>
-                                <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
+                                <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis type="number" tickFormatter={formatCurrency}/>
-                                    <YAxis type="category" dataKey="name" width={100} interval={0} textAnchor="start" />
+                                    <YAxis type="category" dataKey="name" width={120} interval={0} />
                                     <Tooltip formatter={(value) => formatCurrency(value)} />
                                     <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
                                 </BarChart>
