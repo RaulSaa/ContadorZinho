@@ -126,7 +126,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const exportClassifiedData = () => {
         const header = "Data;Descrição;Tipo;Valor;Categoria;Importador";
         const csvRows = [header];
-        filteredTransactions.forEach(t => {
+        filteredHistoryTransactions.forEach(t => {
             const date = t.timestamp?.toDate().toLocaleDateString('pt-BR') || '';
             const description = `"${(t.description || '').replace(/"/g, '""')}"`;
             const type = t.type || '';
@@ -147,7 +147,8 @@ const FinanceTracker = ({ auth, db, userId }) => {
         document.body.removeChild(link);
     };
 
-    const filteredTransactions = transactions.filter(t => {
+    // CORREÇÃO: Cria uma lista base para os totais, aplicando apenas os filtros principais.
+    const transactionsForSummary = transactions.filter(t => {
         const transactionDate = t.timestamp?.toDate();
         if (!transactionDate) return false;
         const start = startDate ? new Date(startDate + 'T00:00:00') : null;
@@ -155,18 +156,22 @@ const FinanceTracker = ({ auth, db, userId }) => {
         if (start && transactionDate < start) return false;
         if (end && transactionDate > end) return false;
         if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
-        // CORREÇÃO: Verifica se a categoria é nula ou uma string vazia
+        return true;
+    });
+
+    // CORREÇÃO: Cria uma segunda lista para o histórico, aplicando os filtros de classificação sobre a lista base.
+    const filteredHistoryTransactions = transactionsForSummary.filter(t => {
         if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
         if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
         return true;
     });
 
-    const totalRevenue = filteredTransactions.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = filteredTransactions.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
+    // CORREÇÃO: Calcula os totais a partir da lista base, não da lista do histórico.
+    const totalRevenue = transactionsForSummary.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
     const totalBalance = totalRevenue + totalExpense;
     
     const barChartData = [];
-    // CORREÇÃO: Conta como não classificado se a categoria for nula ou uma string vazia
     const unclassifiedCount = transactions.filter(t => !t.category || t.category === '').length;
     const totalRaul = transactions.filter(t => t.importer === 'Raul').length;
     const classifiedRaul = transactions.filter(t => t.importer === 'Raul' && t.category && t.category !== '').length;
@@ -300,7 +305,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
                                <button onClick={() => setClassificationFilter('Classificados')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Classificados' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Classificadas</button>
                                <button onClick={() => setClassificationFilter('A Classificar')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'A Classificar' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>A Classificar</button>
                              </div>
-                            {filteredTransactions.map(t => (
+                            {filteredHistoryTransactions.map(t => (
                                 <div key={t.id} className="py-4 flex justify-between items-center border-b">
                                     <div>
                                         <p className="font-medium">{t.description}</p>
