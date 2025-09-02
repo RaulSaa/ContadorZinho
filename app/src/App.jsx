@@ -59,7 +59,7 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [endDate, setEndDate] = useState('');
     const [activeTab, setActiveTab] = useState('lancamentos');
 
-    const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
+    const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
     const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
     useEffect(() => {
@@ -160,8 +160,8 @@ const FinanceTracker = ({ auth, db, userId }) => {
         return true;
     });
 
-    const totalRevenue = filteredTransactions.filter(t => t.type === 'receita').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = filteredTransactions.filter(t => t.type === 'despesa').reduce((sum, t) => sum + t.amount, 0);
+    const totalRevenue = filteredTransactions.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = filteredTransactions.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
     const totalBalance = totalRevenue + totalExpense;
     
     const barChartData = [];
