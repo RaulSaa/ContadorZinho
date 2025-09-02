@@ -1,2 +1,4 @@
 # ContadorZinho
-criação de aplicativo para controle de despesas caseiras
+criação de aplicativo para controle de despesas caseiras.
+
+Aplicativo compartilhável
