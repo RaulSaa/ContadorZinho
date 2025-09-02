@@ -1,224 +1,299 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut
-} from 'firebase/auth';
-import { getFirestore, doc, collection, onSnapshot, addDoc, setDoc, deleteDoc, query } from 'firebase/firestore';
-
-// --- COMPONENTES AUXILIARES ---
-const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-const LoadingScreen = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-xl font-semibold text-gray-700">A carregar...</div>
-    </div>
-);
-
-const ErrorScreen = ({ message }) => (
-  <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-    <div className="bg-white p-8 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-red-600 mb-4">Erro</h2>
-      <p className="text-gray-700">{message}</p>
-      <p className="text-sm text-gray-500 mt-2">Verifique o console para mais detalhes</p>
-    </div>
-  </div>
-);
-
-// --- TELA PRINCIPAL DO APP DE FINANÇAS ---
-const FinanceTracker = ({ auth, db, userId }) => {
-    const [transactions, setTransactions] = useState([]);
-    const [description, setDescription] = useState('');
-    const [amount, setAmount] = useState('');
-    const [type, setType] = useState('receita');
-    const [manualDate, setManualDate] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [isResponsiblePopupOpen, setIsResponsiblePopupOpen] = useState(false);
-
-    useEffect(() => {
-        if (!db || !userId) return;
-        const transactionsCollection = collection(db, `users/${userId}/transactions`);
-        const unsubscribe = onSnapshot(query(transactionsCollection), (snapshot) => {
-            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            fetched.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-            setTransactions(fetched);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, [db, userId]);
-
-    const addTransaction = (e, responsible) => {
-        e.preventDefault();
-        if (!description || !amount || !manualDate) return;
-        const data = { description, amount: parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate) };
-        addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
-            setDescription(''); setAmount(''); setManualDate(''); setIsResponsiblePopupOpen(false);
-        });
-    };
-
-    if (loading) return <LoadingScreen />;
-
-    return (
-        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
-            {isResponsiblePopupOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                  <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center space-y-4">
-                    <h3 className="text-xl font-bold">Quem é o responsável?</h3>
-                    <div className="flex gap-4">
-                      <button onClick={(e) => addTransaction(e, 'Raul')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Raul</button>
-                      <button onClick={(e) => addTransaction(e, 'Karol')} className="flex-1 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Karol</button>
-                    </div>
-                    <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full text-sm text-gray-500 hover:underline">Cancelar</button>
-                  </div>
-                </div>
-            )}
-            <div className="max-w-4xl mx-auto space-y-8">
-                <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
-                    <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
-                    <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Sair</button>
-                </header>
-                 <section className="bg-white p-6 rounded-xl shadow-lg">
-                  <h2 className="text-2xl font-bold mb-4 text-gray-900">Adicionar Nova Transação</h2>
-                  <form className="space-y-4">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                      <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Valor" className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <select value={type} onChange={(e) => setType(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
-                      <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="flex-1 mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
-                    </div>
-                    <button type="button" onClick={() => setIsResponsiblePopupOpen(true)} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Adicionar Transação</button>
-                  </form>
-                </section>
-                <section className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-4 text-gray-900">Histórico de Transações</h2>
-                    {transactions.length > 0 ? (
-                        <ul className="divide-y divide-gray-200">
-                            {transactions.map((t) => (
-                                <li key={t.id} className="py-4 flex justify-between items-center">
-                                    <div>
-                                        <p className="font-medium">{t.description}</p>
-                                        <p className="text-sm text-gray-500">
-                                          {t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('pt-BR') : 'Data inválida'}
-                                        </p>
-                                    </div>
-                                    <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
-                                      {formatCurrency(t.amount)}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (<p className="text-center text-gray-500">Nenhuma transação.</p>)}
-                </section>
-            </div>
-        </div>
-    );
-};
-
-// --- TELA DE LOGIN E REGISTO ---
-const AuthScreen = ({ auth }) => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [isLogin, setIsLogin] = useState(true);
-    const [error, setError] = useState('');
-
-    const handleAuthAction = async (e) => {
-        e.preventDefault();
-        setError('');
-        try {
-            if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                await createUserWithEmailAndPassword(auth, email, password);
-            }
-        } catch (err) {
-            setError(err.message.replace('Firebase: ', '').replace('Error ', '').replace(/ \(auth.*\)\.?/, ''));
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erro de Configuração - Firebase</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-    };
-    
-    return (
-        <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
-            <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
-                <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">{isLogin ? 'Login' : 'Registo'}</h2>
-                <form onSubmit={handleAuthAction} className="space-y-6">
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-                        <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #ff6b6b;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        .problem, .solution {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+        }
+        
+        .problem {
+            border-right: 1px solid #eee;
+        }
+        
+        h2 {
+            color: #5c6bc0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        h2 i {
+            margin-right: 10px;
+        }
+        
+        .step {
+            margin-bottom: 25px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #5c6bc0;
+        }
+        
+        .step h3 {
+            color: #5c6bc0;
+            margin-bottom: 10px;
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .env-var {
+            color: #a6e22e;
+        }
+        
+        .env-value {
+            color: #ae81ff;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        
+        .actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border-radius: 30px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #5c6bc0;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3f51b5;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(92, 107, 192, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 1px solid #dee2e6;
+        }
+        
+        .btn-secondary:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+        
+        .btn i {
+            margin-right: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .problem, .solution {
+                border-right: none;
+                border-bottom: 1px solid #eee;
+            }
+            
+            .content {
+                flex-direction: column;
+            }
+        }
+        
+        .firebase-config {
+            background: #ffecb3;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .firebase-config h4 {
+            margin-bottom: 10px;
+            color: #ff8f00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-exclamation-triangle"></i> Erro de Configuração do Firebase</h1>
+            <p>As variáveis de ambiente não estão configuradas corretamente no Vercel</p>
+        </div>
+        
+        <div class="content">
+            <div class="problem">
+                <h2><i class="fas fa-bug"></i> O Problema</h2>
+                
+                <div class="step">
+                    <h3>Variáveis de ambiente não encontradas</h3>
+                    <p>Seu aplicativo React não consegue acessar as variáveis de ambiente necessárias para conectar com o Firebase.</p>
+                </div>
+                
+                <div class="step">
+                    <h3>Mensagem de erro no console</h3>
+                    <div class="code-block">
+                        <span style="color: #f92672">Chave do Firebase não foram carregadas.</span><br>
+                        <span style="color: #f92672">Verifique as variáveis de ambiente na Vercel.</span>
                     </div>
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha</label>
-                        <input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm"/>
+                </div>
+                
+                <div class="step">
+                    <h3>Configuração do Firebase necessária</h3>
+                    <div class="firebase-config">
+                        <h4>Seu firebaseConfig deve ser:</h4>
+                        <pre>
+const firebaseConfig = {
+  apiKey: "AIzaSyBv0WRGvYlmBotnBc2InD85N1teQf45V2g",
+  authDomain: "casinha-kr.firebaseapp.com",
+  projectId: "casinha-kr",
+  storageBucket: "casinha-kr.firebasestorage.app",
+  messagingSenderId: "311939192764",
+  appId: "1:311939192764:web:6a14910e5c35c4391a3db9",
+  measurementId: "G-EDMYBHR1TY"
+};</pre>
                     </div>
-                    {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-                    <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                        {isLogin ? 'Entrar' : 'Criar Conta'}
-                    </button>
-                </form>
-                <div className="text-center mt-6">
-                    <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                        {isLogin ? 'Não tem uma conta? Registe-se' : 'Já tem uma conta? Faça login'}
-                    </button>
+                </div>
+            </div>
+            
+            <div class="solution">
+                <h2><i class="fas fa-wrench"></i> A Solução</h2>
+                
+                <div class="step">
+                    <h3>Passo 1: Acessar o painel do Vercel</h3>
+                    <p>Entre no dashboard do Vercel e selecione seu projeto.</p>
+                </div>
+                
+                <div class="step">
+                    <h3>Passo 2: Configurar variáveis de ambiente</h3>
+                    <p>Vá em <strong>Settings</strong> → <strong>Environment Variables</strong> e adicione:</p>
+                    <div class="code-block">
+                        <span class="env-var">VITE_FIREBASE_API_KEY</span>=<span class="env-value">AIzaSyBv0WRGvYlmBotnBc2InD85N1teQf45V2g</span><br>
+                        <span class="env-var">VITE_FIREBASE_AUTH_DOMAIN</span>=<span class="env-value">casinha-kr.firebaseapp.com</span><br>
+                        <span class="env-var">VITE_FIREBASE_PROJECT_ID</span>=<span class="env-value">casinha-kr</span><br>
+                        <span class="env-var">VITE_FIREBASE_STORAGE_BUCKET</span>=<span class="env-value">casinha-kr.firebasestorage.app</span><br>
+                        <span class="env-var">VITE_FIREBASE_MESSAGING_SENDER_ID</span>=<span class="env-value">311939192764</span><br>
+                        <span class="env-var">VITE_FIREBASE_APP_ID</span>=<span class="env-value">1:311939192764:web:6a14910e5c35c4391a3db9</span><br>
+                        <span class="env-var">VITE_FIREBASE_MEASUREMENT_ID</span>=<span class="env-value">G-EDMYBHR1TY</span>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <h3>Passo 3: Verificar se não há aspas</h3>
+                    <p>Certifique-se de que os valores das variáveis <strong>não</strong> estão entre aspas.</p>
+                    <div class="note">
+                        <p><strong>Importante:</strong> No Vercel, os valores das variáveis de ambiente devem ser inseridos sem aspas.</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <h3>Passo 4: Refazer o deploy</h3>
+                    <p>Após configurar as variáveis, faça um novo deploy do seu projeto no Vercel.</p>
                 </div>
             </div>
         </div>
-    );
-};
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="window.location.reload()">
+                <i class="fas fa-sync-alt"></i> Tentar Novamente
+            </button>
+            <button class="btn btn-secondary" onclick="alert('No código real, isso levaria você de volta para a página de login')">
+                <i class="fas fa-arrow-left"></i> Voltar para o Login
+            </button>
+        </div>
+    </div>
 
-// --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
-function App() {
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [userId, setUserId] = useState(null);
-    const [view, setView] = useState('loading');
-
-    useEffect(() => {
-        try {
-            const firebaseConfig = {
-                apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-                authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-                projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-                storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-                messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-                appId: import.meta.env.VITE_FIREBASE_APP_ID,
-                measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-            };
-            
-            // Verifica se todas as variáveis estão definidas
-            const isValidConfig = Object.values(firebaseConfig).every(value => !!value);
-            
-            if (!isValidConfig) {
-                throw new Error("Configuração do Firebase incompleta");
-            }
-
-            const firebaseApp = initializeApp(firebaseConfig);
-            const firebaseAuth = getAuth(firebaseApp);
-            const firestoreDb = getFirestore(firebaseApp);
-            
-            setDb(firestoreDb);
-            setAuth(firebaseAuth);
-
-            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-                setUserId(user ? user.uid : null);
-                setView(user ? 'app' : 'auth');
+    <script>
+        // Simulação de funcionalidade de copiar as variáveis
+        document.querySelectorAll('.code-block').forEach(block => {
+            block.addEventListener('click', function() {
+                const text = this.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalBorder = this.style.border;
+                    this.style.border = '2px solid #4caf50';
+                    setTimeout(() => {
+                        this.style.border = originalBorder;
+                    }, 1000);
+                });
             });
-
-            return () => unsubscribe();
-        } catch (error) {
-            console.error("Erro na inicialização do Firebase:", error);
-            setView('error');
-        }
-    }, []);
-
-    if (view === 'loading') return <LoadingScreen />;
-    if (view === 'error') return <ErrorScreen message="Erro de configuração. Verifique as variáveis de ambiente." />;
-    if (view === 'auth') return <AuthScreen auth={auth} />;
-    if (view === 'app') return <FinanceTracker auth={auth} db={db} userId={userId} />;
-    
-    return <LoadingScreen />;
-}
-
-export default App;
+        });
+    </script>
+</body>
+</html>
