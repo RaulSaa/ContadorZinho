@@ -36,67 +36,72 @@ const LoadingScreen = () => (
     </div>
 );
 
-// --- MENU PRINCIPAL ---
-const MainMenu = ({ setView }) => {
+// --- COMPONENTE DE NAVEGAÇÃO LATERAL ---
+const Sidebar = ({ view, setView, auth }) => {
+    const [isOpen, setIsOpen] = useState(false);
     const menuItems = [
-        { name: "Financeiro", view: "finance", icon: "fas fa-chart-pie", color: "bg-blue-500" },
-        { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart", color: "bg-green-500" },
-        { name: "Afazeres", view: "todo", icon: "fas fa-check-square", color: "bg-yellow-500" },
+        { name: "Financeiro", view: "finance", icon: "fas fa-chart-pie" },
+        { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart" },
+        { name: "Afazeres", view: "todo", icon: "fas fa-check-square" },
     ];
+
+    const NavLink = ({ item }) => (
+        <button onClick={() => { setView(item.view); setIsOpen(false); }} className={`flex items-center w-full px-4 py-3 text-left rounded-lg transition-colors duration-200 ${view === item.view ? 'bg-indigo-700 text-white' : 'text-gray-300 hover:bg-indigo-700 hover:text-white'}`}>
+            <i className={`${item.icon} w-6 text-center`}></i>
+            <span className="ml-4">{item.name}</span>
+        </button>
+    );
+
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-             <h1 className="text-4xl font-bold text-gray-800 mb-8">ContadorZinho</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
-                {menuItems.map(item => (
-                    <button key={item.view} onClick={() => setView(item.view)} className={`p-8 rounded-xl shadow-lg text-white text-left flex flex-col justify-between transform hover:scale-105 transition-transform duration-300 ${item.color}`}>
-                        <i className={`${item.icon} text-4xl mb-4`}></i>
-                        <h2 className="text-2xl font-bold">{item.name}</h2>
+        <>
+            <button onClick={() => setIsOpen(!isOpen)} className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-indigo-600 text-white shadow-lg">
+                <i className="fas fa-bars"></i>
+            </button>
+            {isOpen && <div onClick={() => setIsOpen(false)} className="md:hidden fixed inset-0 bg-black opacity-50 z-30"></div>}
+            <aside className={`fixed top-0 left-0 h-full bg-indigo-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 z-40 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+                <div className="text-center py-4 mb-8">
+                    <h2 className="text-2xl font-bold">ContadorZinho</h2>
+                </div>
+                <nav className="flex-grow space-y-2">
+                    {menuItems.map(item => <NavLink key={item.view} item={item} />)}
+                </nav>
+                <div className="mt-auto">
+                    <button onClick={() => signOut(auth)} className="flex items-center w-full px-4 py-3 text-left rounded-lg transition-colors duration-200 text-gray-300 hover:bg-indigo-700 hover:text-white">
+                        <i className="fas fa-sign-out-alt w-6 text-center"></i>
+                        <span className="ml-4">Sair</span>
                     </button>
-                ))}
-            </div>
-             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-        </div>
+                </div>
+            </aside>
+        </>
     );
 };
 
-
 // --- LISTA DE COMPRAS ---
-const ShoppingList = ({ db, userId, setView }) => {
+const ShoppingList = () => {
     return (
-        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
-            <div className="max-w-4xl mx-auto space-y-8">
-                <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
-                    <h1 className="text-3xl font-bold">Lista de Compras</h1>
-                    <button onClick={() => setView('menu')} className="py-2 px-4 rounded-md text-sm font-medium bg-gray-200 hover:bg-gray-300">Voltar ao Menu</button>
-                </header>
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <p className="text-center">Funcionalidade de Lista de Compras em construção.</p>
-                </div>
+        <div className="p-4 md:p-8">
+            <h1 className="text-3xl font-bold mb-6">Lista de Compras</h1>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <p className="text-center">Funcionalidade de Lista de Compras em construção.</p>
             </div>
         </div>
     );
 };
 
 // --- AFAZERES ---
-const TodoList = ({ db, userId, setView }) => {
+const TodoList = () => {
     return (
-        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
-            <div className="max-w-4xl mx-auto space-y-8">
-                 <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
-                    <h1 className="text-3xl font-bold">Afazeres</h1>
-                    <button onClick={() => setView('menu')} className="py-2 px-4 rounded-md text-sm font-medium bg-gray-200 hover:bg-gray-300">Voltar ao Menu</button>
-                </header>
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <p className="text-center">Funcionalidade de Afazeres em construção.</p>
-                </div>
+        <div className="p-4 md:p-8">
+            <h1 className="text-3xl font-bold mb-6">Afazeres</h1>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <p className="text-center">Funcionalidade de Afazeres em construção.</p>
             </div>
         </div>
     );
 };
 
-
 // --- FINANCEIRO (CÓDIGO COMPLETO) ---
-const FinanceTracker = ({ auth, db, userId, setView }) => {
+const FinanceTracker = ({ db, userId }) => {
     const [transactions, setTransactions] = useState([]);
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
@@ -117,7 +122,6 @@ const FinanceTracker = ({ auth, db, userId, setView }) => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [activeTab, setActiveTab] = useState('lancamentos');
-
     const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
     const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
 
@@ -230,7 +234,6 @@ const FinanceTracker = ({ auth, db, userId, setView }) => {
     const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
     const totalBalance = totalRevenue + totalExpense;
     
-    // --- CÁLCULOS PARA GRÁFICOS ---
     const barChartData = Object.entries(
         transactionsForSummary
             .filter(t => t.type === 'despesa' && t.category)
@@ -291,7 +294,7 @@ const FinanceTracker = ({ auth, db, userId, setView }) => {
     if (loading) return <LoadingScreen />;
 
     return (
-        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
+        <div className="p-4 md:p-8">
             <StatusMessage message={parsingMessage.message} type={parsingMessage.type} onClose={() => setParsingMessage({message: '', type: ''})} />
              {isAddTransactionPopupOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -349,20 +352,14 @@ const FinanceTracker = ({ auth, db, userId, setView }) => {
                     </div>
                  </div>
             )}
-            <div className="max-w-4xl mx-auto space-y-8">
-                 <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                     <div className="flex items-center gap-4">
-                         <button onClick={() => setView('menu')} className="p-2 rounded-md hover:bg-gray-200">
-                            <i className="fas fa-arrow-left"></i>
-                         </button>
-                        <h1 className="text-3xl font-bold text-gray-900 self-center md:self-start">Financeiro</h1>
-                     </div>
+            <div className="space-y-8">
+                <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                    <h1 className="text-3xl font-bold text-gray-900 self-center md:self-start">ContadorZinho</h1>
                     <div className="flex flex-col sm:flex-row items-center gap-2">
                         <div className="flex gap-2">
                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-md text-sm w-36"/>
                             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-md text-sm w-36"/>
                         </div>
-                        <button onClick={() => signOut(auth)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 w-full sm:w-auto">Sair</button>
                     </div>
                 </header>
                 <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
@@ -562,7 +559,8 @@ function App() {
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
-    const [view, setView] = useState('loading'); // loading, auth, menu, finance, shopping, todo
+    const [view, setView] = useState('finance'); // Começa no financeiro por defeito
+    const [isAuthReady, setIsAuthReady] = useState(false);
 
     useEffect(() => {
         try {
@@ -589,26 +587,31 @@ function App() {
             onAuthStateChanged(firebaseAuth, (user) => {
                 if (user) {
                     setUserId(user.uid);
-                    setView('menu');
                 } else {
                     setUserId(null);
-                    setView('auth');
                 }
+                setIsAuthReady(true);
             });
         } catch (e) {
             console.error("Erro na inicialização do Firebase:", e);
-            setView('auth');
+            setIsAuthReady(true); 
         }
     }, []);
 
-    if (view === 'loading') return <LoadingScreen />;
-    if (view === 'auth') return <AuthScreen auth={auth} />;
-    if (view === 'menu') return <MainMenu setView={setView} />;
-    if (view === 'finance') return <FinanceTracker auth={auth} db={db} userId={userId} setView={setView} />;
-    if (view === 'shopping') return <ShoppingList db={db} userId={userId} setView={setView} />;
-    if (view === 'todo') return <TodoList db={db} userId={userId} setView={setView} />;
+    if (!isAuthReady) return <LoadingScreen />;
+    if (!userId) return <AuthScreen auth={auth} />;
     
-    return <LoadingScreen />;
+    return (
+        <div className="relative min-h-screen md:flex">
+            <Sidebar view={view} setView={setView} auth={auth} />
+            <main className="flex-1 md:ml-64 bg-gray-100">
+                {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
+                {view === 'shopping' && <ShoppingList />}
+                {view === 'todo' && <TodoList />}
+            </main>
+             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+        </div>
+    );
 }
 
 export default App;
