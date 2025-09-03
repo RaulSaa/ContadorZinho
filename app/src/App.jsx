@@ -36,8 +36,67 @@ const LoadingScreen = () => (
     </div>
 );
 
-// --- TELA PRINCIPAL DO APP DE FINANÇAS ---
-const FinanceTracker = ({ auth, db, userId }) => {
+// --- MENU PRINCIPAL ---
+const MainMenu = ({ setView }) => {
+    const menuItems = [
+        { name: "Financeiro", view: "finance", icon: "fas fa-chart-pie", color: "bg-blue-500" },
+        { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart", color: "bg-green-500" },
+        { name: "Afazeres", view: "todo", icon: "fas fa-check-square", color: "bg-yellow-500" },
+    ];
+    return (
+        <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+             <h1 className="text-4xl font-bold text-gray-800 mb-8">ContadorZinho</h1>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
+                {menuItems.map(item => (
+                    <button key={item.view} onClick={() => setView(item.view)} className={`p-8 rounded-xl shadow-lg text-white text-left flex flex-col justify-between transform hover:scale-105 transition-transform duration-300 ${item.color}`}>
+                        <i className={`${item.icon} text-4xl mb-4`}></i>
+                        <h2 className="text-2xl font-bold">{item.name}</h2>
+                    </button>
+                ))}
+            </div>
+             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+        </div>
+    );
+};
+
+
+// --- LISTA DE COMPRAS ---
+const ShoppingList = ({ db, userId, setView }) => {
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
+            <div className="max-w-4xl mx-auto space-y-8">
+                <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
+                    <h1 className="text-3xl font-bold">Lista de Compras</h1>
+                    <button onClick={() => setView('menu')} className="py-2 px-4 rounded-md text-sm font-medium bg-gray-200 hover:bg-gray-300">Voltar ao Menu</button>
+                </header>
+                <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <p className="text-center">Funcionalidade de Lista de Compras em construção.</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- AFAZERES ---
+const TodoList = ({ db, userId, setView }) => {
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
+            <div className="max-w-4xl mx-auto space-y-8">
+                 <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center">
+                    <h1 className="text-3xl font-bold">Afazeres</h1>
+                    <button onClick={() => setView('menu')} className="py-2 px-4 rounded-md text-sm font-medium bg-gray-200 hover:bg-gray-300">Voltar ao Menu</button>
+                </header>
+                <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <p className="text-center">Funcionalidade de Afazeres em construção.</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- FINANCEIRO (CÓDIGO COMPLETO) ---
+const FinanceTracker = ({ auth, db, userId, setView }) => {
     const [transactions, setTransactions] = useState([]);
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
@@ -59,7 +118,6 @@ const FinanceTracker = ({ auth, db, userId }) => {
     const [endDate, setEndDate] = useState('');
     const [activeTab, setActiveTab] = useState('lancamentos');
 
-    // Estados para o filtro do gráfico de gastos fixos
     const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
     const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
 
@@ -292,8 +350,13 @@ const FinanceTracker = ({ auth, db, userId }) => {
                  </div>
             )}
             <div className="max-w-4xl mx-auto space-y-8">
-                <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h1 className="text-3xl font-bold text-gray-900 self-center md:self-start">ContadorZinho</h1>
+                 <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                     <div className="flex items-center gap-4">
+                         <button onClick={() => setView('menu')} className="p-2 rounded-md hover:bg-gray-200">
+                            <i className="fas fa-arrow-left"></i>
+                         </button>
+                        <h1 className="text-3xl font-bold text-gray-900 self-center md:self-start">Financeiro</h1>
+                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-2">
                         <div className="flex gap-2">
                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-md text-sm w-36"/>
@@ -499,7 +562,7 @@ function App() {
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
-    const [view, setView] = useState('loading');
+    const [view, setView] = useState('loading'); // loading, auth, menu, finance, shopping, todo
 
     useEffect(() => {
         try {
@@ -514,7 +577,7 @@ function App() {
             };
             
             if (!firebaseConfig.apiKey) {
-                console.error("Chaves do Firebase não foram carregadas. Verifique as variáveis de ambiente na Vercel.");
+                console.error("Chaves do Firebase não foram carregadas.");
             }
 
             const firebaseApp = initializeApp(firebaseConfig);
@@ -523,16 +586,15 @@ function App() {
             setDb(firestoreDb);
             setAuth(firebaseAuth);
 
-            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+            onAuthStateChanged(firebaseAuth, (user) => {
                 if (user) {
                     setUserId(user.uid);
-                    setView('app');
+                    setView('menu');
                 } else {
                     setUserId(null);
                     setView('auth');
                 }
             });
-            return () => unsubscribe();
         } catch (e) {
             console.error("Erro na inicialização do Firebase:", e);
             setView('auth');
@@ -541,7 +603,10 @@ function App() {
 
     if (view === 'loading') return <LoadingScreen />;
     if (view === 'auth') return <AuthScreen auth={auth} />;
-    if (view === 'app') return <FinanceTracker auth={auth} db={db} userId={userId} />;
+    if (view === 'menu') return <MainMenu setView={setView} />;
+    if (view === 'finance') return <FinanceTracker auth={auth} db={db} userId={userId} setView={setView} />;
+    if (view === 'shopping') return <ShoppingList db={db} userId={userId} setView={setView} />;
+    if (view === 'todo') return <TodoList db={db} userId={userId} setView={setView} />;
     
     return <LoadingScreen />;
 }
