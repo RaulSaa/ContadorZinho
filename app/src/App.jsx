@@ -43,7 +43,8 @@ import React, { useState, useEffect, useRef } from 'react';
      const menuItems = [
          { name: "ContadorZinho", view: "finance", icon: "fas fa-chart-pie" },
          { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart" },
-         { name: "Afazeres", view: "todo", icon: "fas fa-check-square" },
+        // MODIFICADO: "Afazeres" para "Missões"
+         { name: "Missões", view: "todo", icon: "fas fa-check-square" },
          { name: "Calendário", view: "calendar", icon: "fas fa-calendar-alt" },
      ];
 
@@ -387,7 +388,7 @@ import React, { useState, useEffect, useRef } from 'react';
              handleCloseModal();
          } catch (error) {
              console.error("Erro ao salvar a missão:", error);
-             alert("Ocorreu um erro ao salvar a missão. Tente novamente.");
+             alert("Ocorreu um erro ao salvar a missão. Verifique as regras de segurança do Firestore no console do Firebase.");
          }
      };
 
