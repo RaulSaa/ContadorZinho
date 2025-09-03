@@ -329,7 +329,7 @@ const CalendarView = ({ db, userId }) => {
     const [reminder, setReminder] = useState('none');
 
     const holidays = {
-        '01-01': { name: 'Confraternização Universal', type: 'national' },'01-25': { name: 'Aniversário de São Paulo', type: 'local' },'03-04': { name: 'Carnaval', type: 'national' },'04-18': { name: 'Paixão de Cristo', type: 'national' },'04-21': { name: 'Tiradentes', type: 'national' },'05-01': { name: 'Dia do Trabalho', type: 'national' },'06-19': { name: 'Corpus Christi', type: 'national' },'07-09': { name: 'Revolução Constitucionalista', type: 'local' },'09-07': { name: 'Independência do Brasil', type: 'national' },'10-12': { name: 'Nossa Senhora Aparecida', type: 'national' },'11-02': { name: 'Finados', type: 'national' },'11-15': { name: 'Proclamação da República', type: 'national' },'11-20': { name: 'Consciência Negra', type: 'local' },'12-25': { name: 'Natal', type: 'national' },
+        '01-01': { name: 'Confraternização Universal' },'01-25': { name: 'Aniversário de São Paulo' },'03-04': { name: 'Carnaval' },'04-18': { name: 'Paixão de Cristo' },'04-21': { name: 'Tiradentes' },'05-01': { name: 'Dia do Trabalho' },'06-19': { name: 'Corpus Christi' },'07-09': { name: 'Revolução Constitucionalista' },'09-07': { name: 'Independência do Brasil' },'10-12': { name: 'Nossa Senhora Aparecida' },'11-02': { name: 'Finados' },'11-15': { name: 'Proclamação da República' },'11-20': { name: 'Consciência Negra' },'12-25': { name: 'Natal' },
     };
 
     // Pedir permissão para notificações
@@ -435,7 +435,23 @@ const CalendarView = ({ db, userId }) => {
         return days;
     };
     
-    const selectedDayEvents = selectedDate ? events.filter(e => new Date(e.start.seconds * 1000).toDateString() === selectedDate.toDateString()) : [];
+    const getSelectedDayEvents = () => {
+        if (!selectedDate) return [];
+        
+        const userEvents = events
+            .filter(e => new Date(e.start.seconds * 1000).toDateString() === selectedDate.toDateString())
+            .map(e => ({...e, type: 'event'}));
+
+        const dateString = `${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+        const holiday = holidays[dateString];
+
+        if (holiday) {
+            return [{...holiday, type: 'holiday'}, ...userEvents];
+        }
+        return userEvents;
+    };
+
+    const selectedDayEvents = getSelectedDayEvents();
     
     return (
         <div className="p-4 md:p-8">
@@ -499,15 +515,14 @@ const CalendarView = ({ db, userId }) => {
                     {getDaysForMonth().map(dayInfo => (
                         <div key={dayInfo.key} 
                              onClick={() => !dayInfo.isEmpty && setSelectedDate(dayInfo.date)}
-                             className={`p-2 h-24 text-center border rounded-lg cursor-pointer transition-colors
+                             className={`p-2 h-24 text-center border rounded-lg cursor-pointer transition-colors relative
                                 ${dayInfo.isEmpty ? 'bg-gray-50' : 'hover:bg-gray-100'}
                                 ${dayInfo.isToday ? 'bg-indigo-100 font-bold' : ''}
-                                ${dayInfo.holiday?.type === 'national' ? 'bg-red-100' : ''}
-                                ${dayInfo.holiday?.type === 'local' ? 'bg-yellow-100' : ''}
+                                ${dayInfo.holiday ? 'bg-blue-100' : ''}
+                                ${dayInfo.hasEvents ? 'bg-yellow-100' : ''}
                                 ${selectedDate?.toDateString() === dayInfo.date?.toDateString() ? 'ring-2 ring-indigo-500' : ''}`}>
                             <span className="text-sm">{dayInfo.day}</span>
-                            {dayInfo.hasEvents && <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-blue-500"></div>}
-                            {dayInfo.holiday && <div className="mt-1 text-xs truncate" title={dayInfo.holiday.name}>{dayInfo.holiday.name}</div>}
+                            {dayInfo.hasEvents && dayInfo.holiday && <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-orange-500"></div>}
                         </div>
                     ))}
                 </div>
@@ -517,12 +532,18 @@ const CalendarView = ({ db, userId }) => {
                     <h2 className="text-2xl font-bold mb-4">Eventos para {selectedDate.toLocaleDateString('pt-BR')}</h2>
                     {selectedDayEvents.length > 0 ? (
                         <ul className="space-y-3">
-                            {selectedDayEvents.map(event => (
-                                <li key={event.id} onClick={() => openEditModal(event)} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
-                                    <p className="font-semibold">{event.title}</p>
-                                    <p className="text-sm text-gray-600">
-                                        {new Date(event.start.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
+                            {selectedDayEvents.map((event, index) => (
+                                <li key={index} onClick={() => event.type === 'event' && openEditModal(event)} 
+                                    className={`p-3 rounded-lg flex items-center gap-3 ${event.type === 'event' ? 'bg-yellow-50 hover:bg-yellow-100 cursor-pointer' : 'bg-blue-50'}`}>
+                                    <i className={`fas ${event.type === 'holiday' ? 'fa-glass-cheers text-blue-500' : 'fa-clock text-yellow-600'}`}></i>
+                                    <div>
+                                        <p className="font-semibold">{event.title || event.name}</p>
+                                        {event.type === 'event' && (
+                                            <p className="text-sm text-gray-600">
+                                                {new Date(event.start.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        )}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
