@@ -3,15 +3,14 @@ importScripts('[https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js](https
 importScripts('[https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js](https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js)');
 
 // Initialize the Firebase app in the service worker by passing in the messagingSenderId.
-// Use os seus próprios valores aqui
 firebase.initializeApp({
-    apiKey: "COLE_AQUI_SUA_API_KEY",
-    authDomain: "COLE_AQUI_SEU_AUTH_DOMAIN",
-    projectId: "COLE_AQUI_SEU_PROJECT_ID",
-    storageBucket: "COLE_AQUI_SEU_STORAGE_BUCKET",
-    messagingSenderId: "COLE_AQUI_SEU_MESSAGING_SENDER_ID",
-    appId: "COLE_AQUI_SEU_APP_ID",
-    measurementId: "COLE_AQUI_SEU_MEASUREMENT_ID"
+    apiKey: "AIzaSyBv0WRGvYlmBotnBc2InD85N1teQf45V2g",
+    authDomain: "casinha-kr.firebaseapp.com",
+    projectId: "casinha-kr",
+    storageBucket: "casinha-kr.firebasestorage.app",
+    messagingSenderId: "311939192764",
+    appId: "1:311939192764:web:6a14910e5c35c4391a3db9",
+    measurementId: "G-EDMYBHR1TY"
 });
 
 // Retrieve an instance of Firebase Messaging so that it can handle background messages.
