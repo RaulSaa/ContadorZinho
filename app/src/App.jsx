@@ -78,7 +78,7 @@ import React, { useState, useEffect, useRef } from 'react';
      );
  };
 
- // --- LISTA DE COMPRAS ---
+// --- LISTA DE COMPRAS ---
  const ShoppingList = ({ db, userId }) => {
      const [categories, setCategories] = useState([]);
      const [newItem, setNewItem] = useState({});
@@ -87,6 +87,7 @@ import React, { useState, useEffect, useRef } from 'react';
      const [categoriesToDelete, setCategoriesToDelete] = useState([]);
      const [deleteMode, setDeleteMode] = useState(false);
      const [itemsToDelete, setItemsToDelete] = useState([]);
+     const [collapsedCategories, setCollapsedCategories] = useState([]); // NOVO: Estado para controlar categorias recolhidas
      const pressTimer = useRef();
 
      useEffect(() => {
@@ -188,21 +189,12 @@ import React, { useState, useEffect, useRef } from 'react';
              setIsEditModalOpen(false);
          }
      };
-
-     const handleReorderItem = async (categoryId, itemIndex, direction) => {
-         const category = categories.find(c => c.id === categoryId);
-         if (!category) return;
-
-         const items = [...category.items];
-         const item = items[itemIndex];
-         const swapIndex = direction === 'up' ? itemIndex - 1 : itemIndex + 1;
-
-         if (swapIndex < 0 || swapIndex >= items.length) return;
-
-         [items[itemIndex], items[swapIndex]] = [items[swapIndex], items[itemIndex]];
-
-         const categoryRef = doc(db, `users/${userId}/shoppingLists`, categoryId);
-         await updateDoc(categoryRef, { items });
+ 
+     // NOVO: Função para alternar a visibilidade de uma categoria
+     const toggleCategoryCollapse = (categoryId) => {
+         setCollapsedCategories(prev =>
+             prev.includes(categoryId) ? prev.filter(id => id !== categoryId) : [...prev, categoryId]
+         );
      };
 
      return (
@@ -248,51 +240,62 @@ import React, { useState, useEffect, useRef } from 'react';
              </header>
             
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {categories.map(cat => (
-                     <div key={cat.id} className="bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                         <h3 className="text-xl font-bold mb-4">{cat.name}</h3>
-                         <div className="space-y-3 flex-grow">
-                             {cat.items?.sort((a,b) => a.purchased - b.purchased).map((item, index) => (
-                                 <div
-                                     key={index}
-                                     className="flex items-center space-x-3 group cursor-pointer"
-                                     onClick={() => handleItemInteraction(cat.id, item)}
-                                     onTouchStart={() => handlePressStart(cat.id, item)}
-                                     onTouchEnd={handlePressEnd}
-                                     onMouseDown={() => handlePressStart(cat.id, item)}
-                                     onMouseUp={handlePressEnd}
-                                 >
-                                     {!deleteMode ? (
-                                         <input type="checkbox" readOnly checked={item.purchased} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 pointer-events-none"/>
-                                     ) : (
-                                         <input type="checkbox" readOnly checked={itemsToDelete.some(i => i.name === item.name && i.categoryId === cat.id)} className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 pointer-events-none"/>
-                                     )}
-                                     <span className={`flex-grow ${item.purchased && !deleteMode ? 'line-through text-gray-400' : ''}`}>{item.name}</span>
-                                      <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                                         <button onClick={(e) => {e.stopPropagation(); handleReorderItem(cat.id, index, 'up')}} disabled={index === 0} className="px-2 text-gray-400 hover:text-gray-700 disabled:opacity-20"><i className="fas fa-arrow-up"></i></button>
-                                         <button onClick={(e) => {e.stopPropagation(); handleReorderItem(cat.id, index, 'down')}} disabled={index === cat.items.length - 1} className="px-2 text-gray-400 hover:text-gray-700 disabled:opacity-20"><i className="fas fa-arrow-down"></i></button>
-                                     </div>
-                                 </div>
-                             ))}
-                         </div>
-                          <div className="mt-4 pt-4 border-t flex items-center space-x-3 opacity-60 focus-within:opacity-100">
-                              <div className="h-5 w-5 rounded border-gray-400 flex-shrink-0"></div>
-                              <input
-                                 type="text"
-                                 placeholder="Novo item..."
-                                 value={newItem[cat.id] || ''}
-                                 onChange={(e) => setNewItem({ ...newItem, [cat.id]: e.target.value })}
-                                 onKeyPress={(e) => e.key === 'Enter' && handleAddItem(cat.id)}
-                                 className="w-full bg-transparent focus:outline-none"
-                              />
-                              {newItem[cat.id] && (
-                                 <button onClick={() => handleAddItem(cat.id)} className="text-green-500 hover:text-green-700 p-1">
-                                     <i className="fas fa-check"></i>
+                 {categories.map(cat => {
+                     const isCollapsed = collapsedCategories.includes(cat.id);
+                     return (
+                         <div key={cat.id} className="bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                             <div className="flex justify-between items-center mb-4">
+                                 <h3 className="text-xl font-bold">{cat.name}</h3>
+                                 {/* NOVO: Botão de ocultar/desocultar */}
+                                 <button onClick={() => toggleCategoryCollapse(cat.id)} className="text-gray-400 hover:text-gray-700">
+                                     <i className={`fas ${isCollapsed ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                                  </button>
-                              )}
+                             </div>
+                             {/* MODIFICADO: Conteúdo da categoria é renderizado condicionalmente */}
+                             {!isCollapsed && (
+                                 <>
+                                     <div className="space-y-3 flex-grow">
+                                         {/* MODIFICADO: Ordenação alfabética e por status de compra */}
+                                         {cat.items?.sort((a,b) => a.purchased - b.purchased || a.name.localeCompare(b.name)).map((item, index) => (
+                                             <div
+                                                 key={index}
+                                                 className="flex items-center space-x-3 group cursor-pointer"
+                                                 onClick={() => handleItemInteraction(cat.id, item)}
+                                                 onTouchStart={() => handlePressStart(cat.id, item)}
+                                                 onTouchEnd={handlePressEnd}
+                                                 onMouseDown={() => handlePressStart(cat.id, item)}
+                                                 onMouseUp={handlePressEnd}
+                                             >
+                                                 {!deleteMode ? (
+                                                     <input type="checkbox" readOnly checked={item.purchased} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 pointer-events-none"/>
+                                                 ) : (
+                                                     <input type="checkbox" readOnly checked={itemsToDelete.some(i => i.name === item.name && i.categoryId === cat.id)} className="h-5 w-5 rounded border-gray-300 text-red-600 focus:ring-red-500 pointer-events-none"/>
+                                                 )}
+                                                 <span className={`flex-grow ${item.purchased && !deleteMode ? 'line-through text-gray-400' : ''}`}>{item.name}</span>
+                                             </div>
+                                         ))}
+                                     </div>
+                                     <div className="mt-4 pt-4 border-t flex items-center space-x-3 opacity-60 focus-within:opacity-100">
+                                         <div className="h-5 w-5 rounded border-gray-400 flex-shrink-0"></div>
+                                         <input
+                                             type="text"
+                                             placeholder="Novo item..."
+                                             value={newItem[cat.id] || ''}
+                                             onChange={(e) => setNewItem({ ...newItem, [cat.id]: e.target.value })}
+                                             onKeyPress={(e) => e.key === 'Enter' && handleAddItem(cat.id)}
+                                             className="w-full bg-transparent focus:outline-none"
+                                         />
+                                         {newItem[cat.id] && (
+                                             <button onClick={() => handleAddItem(cat.id)} className="text-green-500 hover:text-green-700 p-1">
+                                                 <i className="fas fa-check"></i>
+                                             </button>
+                                         )}
+                                     </div>
+                                 </>
+                             )}
                          </div>
-                     </div>
-                 ))}
+                     )
+                 })}
              </div>
              {deleteMode && (
                  <div className="fixed bottom-6 right-6 flex flex-col items-center gap-2">
