@@ -61,7 +61,7 @@ const Sidebar = ({ view, setView, auth }) => {
             {isOpen && <div onClick={() => setIsOpen(false)} className="md:hidden fixed inset-0 bg-black opacity-50 z-30"></div>}
             <aside className={`fixed top-0 left-0 h-full bg-indigo-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 z-40 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
                 <div className="text-center py-4 mb-8">
-                    <h2 className="text-2xl font-bold">KR App</h2>
+                    <h2 className="text-2xl font-bold">Casinha KR</h2>
                 </div>
                 <nav className="flex-grow space-y-2">
                     {menuItems.map(item => <NavLink key={item.view} item={item} />)}
