@@ -40,9 +40,10 @@ const LoadingScreen = () => (
 const Sidebar = ({ view, setView, auth }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuItems = [
-        { name: "Financeiro", view: "finance", icon: "fas fa-chart-pie" },
+        { name: "ContadorZinho", view: "finance", icon: "fas fa-chart-pie" },
         { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart" },
         { name: "Afazeres", view: "todo", icon: "fas fa-check-square" },
+        { name: "Calendário", view: "calendar", icon: "fas fa-calendar-alt" },
     ];
 
     const NavLink = ({ item }) => (
@@ -60,7 +61,7 @@ const Sidebar = ({ view, setView, auth }) => {
             {isOpen && <div onClick={() => setIsOpen(false)} className="md:hidden fixed inset-0 bg-black opacity-50 z-30"></div>}
             <aside className={`fixed top-0 left-0 h-full bg-indigo-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 z-40 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
                 <div className="text-center py-4 mb-8">
-                    <h2 className="text-2xl font-bold">ContadorZinho</h2>
+                    <h2 className="text-2xl font-bold">KR App</h2>
                 </div>
                 <nav className="flex-grow space-y-2">
                     {menuItems.map(item => <NavLink key={item.view} item={item} />)}
@@ -80,7 +81,9 @@ const Sidebar = ({ view, setView, auth }) => {
 const ShoppingList = () => {
     return (
         <div className="p-4 md:p-8">
-            <h1 className="text-3xl font-bold mb-6">Lista de Compras</h1>
+            <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-800">Lista de Compras</h1>
+            </header>
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <p className="text-center">Funcionalidade de Lista de Compras em construção.</p>
             </div>
@@ -92,13 +95,30 @@ const ShoppingList = () => {
 const TodoList = () => {
     return (
         <div className="p-4 md:p-8">
-            <h1 className="text-3xl font-bold mb-6">Afazeres</h1>
+            <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
+                 <h1 className="text-3xl font-bold text-gray-800">Afazeres</h1>
+            </header>
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <p className="text-center">Funcionalidade de Afazeres em construção.</p>
             </div>
         </div>
     );
 };
+
+// --- CALENDÁRIO ---
+const CalendarView = () => {
+    return (
+        <div className="p-4 md:p-8">
+            <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
+                 <h1 className="text-3xl font-bold text-gray-800">Calendário</h1>
+            </header>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <p className="text-center">Funcionalidade de Calendário em construção.</p>
+            </div>
+        </div>
+    );
+};
+
 
 // --- FINANCEIRO (CÓDIGO COMPLETO) ---
 const FinanceTracker = ({ db, userId }) => {
@@ -353,12 +373,16 @@ const FinanceTracker = ({ db, userId }) => {
                  </div>
             )}
             <div className="space-y-8">
-                <header className="p-6 bg-white rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h1 className="text-3xl font-bold text-gray-900 self-center md:self-start">ContadorZinho</h1>
-                    <div className="flex flex-col sm:flex-row items-center gap-2">
-                        <div className="flex gap-2">
-                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-md text-sm w-36"/>
-                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-md text-sm w-36"/>
+                <header className="p-6 bg-white rounded-xl shadow-lg text-center space-y-4">
+                    <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
+                    <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="startDate" className="text-sm font-medium">De:</label>
+                            <input id="startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-md text-sm w-40"/>
+                        </div>
+                         <div className="flex items-center gap-2">
+                            <label htmlFor="endDate" className="text-sm font-medium">Até:</label>
+                            <input id="endDate" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-md text-sm w-40"/>
                         </div>
                     </div>
                 </header>
@@ -457,7 +481,7 @@ const FinanceTracker = ({ db, userId }) => {
                 {activeTab === 'graficos' && (
                     <div className="space-y-8">
                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                            <h2 className="text-2xl font-bold mb-4">Receita vs. Despesa Mensal</h2>
+                            <h2 className="text-2xl font-bold mb-4 text-center">Receita vs. Despesa Mensal</h2>
                             <ResponsiveContainer width="100%" height={300}>
                                 <LineChart data={monthlyChartData}>
                                     <CartesianGrid strokeDasharray="3 3" />
@@ -471,9 +495,9 @@ const FinanceTracker = ({ db, userId }) => {
                             </ResponsiveContainer>
                         </section>
                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex justify-center items-center mb-4 relative">
                                 <h2 className="text-2xl font-bold">Gastos Fixos Mensais</h2>
-                                <button onClick={() => setIsFixedCostFilterOpen(true)} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700">Filtrar</button>
+                                <button onClick={() => setIsFixedCostFilterOpen(true)} className="absolute right-0 py-1 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700">Filtrar</button>
                             </div>
                             <ResponsiveContainer width="100%" height={300}>
                                  <LineChart data={monthlyFixedCostChartData}>
@@ -489,7 +513,7 @@ const FinanceTracker = ({ db, userId }) => {
                             </ResponsiveContainer>
                         </section>
                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                            <h2 className="text-2xl font-bold mb-4">Total por Categoria</h2>
+                            <h2 className="text-2xl font-bold mb-4 text-center">Total por Categoria</h2>
                             <ResponsiveContainer width="100%" height={400}>
                                 <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
@@ -608,6 +632,7 @@ function App() {
                 {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
                 {view === 'shopping' && <ShoppingList />}
                 {view === 'todo' && <TodoList />}
+                {view === 'calendar' && <CalendarView />}
             </main>
              <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
         </div>
