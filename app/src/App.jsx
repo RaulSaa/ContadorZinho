@@ -311,11 +311,11 @@ import React, { useState, useEffect, useRef } from 'react';
      );
  };
 
-// --- AFAZERES ---
+// --- MISSÕES ---
  const TodoList = ({ db, userId }) => {
      const [todos, setTodos] = useState([]);
      const [isModalOpen, setIsModalOpen] = useState(false);
-     const [currentTodo, setCurrentTodo] = useState(null); // Guarda o 'todo' sendo editado
+     const [currentTodo, setCurrentTodo] = useState(null); // Guarda a 'missão' sendo editada
 
      // Estado para o formulário do modal
      const [formData, setFormData] = useState({
@@ -327,7 +327,7 @@ import React, { useState, useEffect, useRef } from 'react';
      });
      const [newStepText, setNewStepText] = useState('');
 
-     // Carregar 'todos' do Firestore
+     // Carregar 'missões' do Firestore
      useEffect(() => {
          if (!db || !userId) return;
          const q = query(collection(db, `users/${userId}/todos`), orderBy('createdAt', 'desc'));
@@ -350,7 +350,6 @@ import React, { useState, useEffect, useRef } from 'react';
          setFormData({
              title: todo.title || '',
              responsible: todo.responsible || '',
-             // Converte o timestamp do Firebase para o formato YYYY-MM-DD para o input de data
              dueDate: todo.dueDate ? new Date(todo.dueDate.seconds * 1000).toISOString().split('T')[0] : '',
              steps: todo.steps || [],
              observations: todo.observations || ''
@@ -375,26 +374,30 @@ import React, { useState, useEffect, useRef } from 'react';
              dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
          };
 
-         if (currentTodo) { // Atualizar
-             const todoRef = doc(db, `users/${userId}/todos`, currentTodo.id);
-             await updateDoc(todoRef, dataToSave);
-         } else { // Criar
-             await addDoc(collection(db, `users/${userId}/todos`), {
-                 ...dataToSave,
-                 createdAt: serverTimestamp(),
-             });
+         try {
+             if (currentTodo) { // Atualizar
+                 const todoRef = doc(db, `users/${userId}/todos`, currentTodo.id);
+                 await updateDoc(todoRef, dataToSave);
+             } else { // Criar
+                 await addDoc(collection(db, `users/${userId}/todos`), {
+                     ...dataToSave,
+                     createdAt: serverTimestamp(),
+                 });
+             }
+             handleCloseModal();
+         } catch (error) {
+             console.error("Erro ao salvar a missão:", error);
+             alert("Ocorreu um erro ao salvar a missão. Tente novamente.");
          }
-         handleCloseModal();
      };
 
      const handleDeleteTodo = async () => {
-         if (currentTodo && window.confirm("Tem a certeza que quer apagar este afazer?")) {
+         if (currentTodo && window.confirm("Tem a certeza que quer apagar esta missão?")) {
              await deleteDoc(doc(db, `users/${userId}/todos`, currentTodo.id));
              handleCloseModal();
          }
      };
     
-     // Funções de manipulação das etapas (steps)
      const handleAddStep = () => {
          if (!newStepText.trim()) return;
          const newStep = { name: newStepText, completed: false };
@@ -419,10 +422,8 @@ import React, { useState, useEffect, useRef } from 'react';
              {isModalOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                      <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                         <h2 className="text-2xl font-bold">{currentTodo ? 'Editar Afazer' : 'Novo Afazer'}</h2>
-                         {/* Título */}
-                         <input type="text" placeholder="Título do afazer..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2 border rounded-md"/>
-                         {/* Responsável e Prazo */}
+                         <h2 className="text-2xl font-bold">{currentTodo ? 'Editar Missão' : 'Nova Missão'}</h2>
+                         <input type="text" placeholder="Título da missão..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2 border rounded-md"/>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <select value={formData.responsible} onChange={e => setFormData({...formData, responsible: e.target.value})} className="w-full p-2 border rounded-md">
                                  <option value="">Sem responsável</option>
@@ -432,12 +433,11 @@ import React, { useState, useEffect, useRef } from 'react';
                              <input type="date" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} className="w-full p-2 border rounded-md"/>
                          </div>
                         
-                        {/* Seção de Etapas (Aparece após criar o card) */}
                         {currentTodo && (
                             <div className="space-y-2 pt-4 border-t">
                                 <h3 className="text-lg font-semibold">Etapas</h3>
                                 <div className="flex gap-2">
-                                    <input type="text" placeholder="Nova etapa..." value={newStepText} onChange={e => setNewStepText(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddStep()} className="flex-grow p-2 border rounded-md"/>
+                                    <input type="text" placeholder="Nova etapa..." value={newStepText} onChange={e => setNewStepText(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddStep} className="flex-grow p-2 border rounded-md"/>
                                     <button onClick={handleAddStep} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Adicionar</button>
                                 </div>
                                 <div className="space-y-1">
@@ -454,7 +454,6 @@ import React, { useState, useEffect, useRef } from 'react';
                             </div>
                         )}
 
-                        {/* Seção de Observações (Aparece após criar o card) */}
                         {currentTodo && (
                              <div className="space-y-2 pt-4 border-t">
                                 <h3 className="text-lg font-semibold">Observações</h3>
@@ -462,7 +461,6 @@ import React, { useState, useEffect, useRef } from 'react';
                             </div>
                         )}
 
-                         {/* Botões de Ação */}
                          <div className="flex justify-between items-center pt-4 border-t">
                              {currentTodo ? (
                                  <button onClick={handleDeleteTodo} className="py-2 px-4 rounded-md text-white bg-red-600 hover:bg-red-700">Apagar</button>
@@ -476,9 +474,9 @@ import React, { useState, useEffect, useRef } from 'react';
                  </div>
              )}
              <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center mb-8">
-                 <h1 className="text-3xl font-bold text-gray-800">Afazeres</h1>
+                 <h1 className="text-3xl font-bold text-gray-800">Missões</h1>
                  <button onClick={handleOpenCreateModal} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                     <i className="fas fa-plus mr-2"></i>Criar Novo Afazer
+                     <i className="fas fa-plus mr-2"></i>Criar Nova Missão
                  </button>
              </header>
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
