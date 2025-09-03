@@ -311,15 +311,194 @@ import React, { useState, useEffect, useRef } from 'react';
      );
  };
 
- // --- AFAZERES ---
- const TodoList = () => {
+// --- AFAZERES ---
+ const TodoList = ({ db, userId }) => {
+     const [todos, setTodos] = useState([]);
+     const [isModalOpen, setIsModalOpen] = useState(false);
+     const [currentTodo, setCurrentTodo] = useState(null); // Guarda o 'todo' sendo editado
+
+     // Estado para o formulário do modal
+     const [formData, setFormData] = useState({
+         title: '',
+         responsible: '',
+         dueDate: '',
+         steps: [],
+         observations: ''
+     });
+     const [newStepText, setNewStepText] = useState('');
+
+     // Carregar 'todos' do Firestore
+     useEffect(() => {
+         if (!db || !userId) return;
+         const q = query(collection(db, `users/${userId}/todos`), orderBy('createdAt', 'desc'));
+         const unsubscribe = onSnapshot(q, (snapshot) => {
+             const todosData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+             setTodos(todosData);
+         });
+         return () => unsubscribe();
+     }, [db, userId]);
+
+     // Funções de manipulação do modal
+     const handleOpenCreateModal = () => {
+         setCurrentTodo(null);
+         setFormData({ title: '', responsible: '', dueDate: '', steps: [], observations: '' });
+         setIsModalOpen(true);
+     };
+
+     const handleOpenEditModal = (todo) => {
+         setCurrentTodo(todo);
+         setFormData({
+             title: todo.title || '',
+             responsible: todo.responsible || '',
+             // Converte o timestamp do Firebase para o formato YYYY-MM-DD para o input de data
+             dueDate: todo.dueDate ? new Date(todo.dueDate.seconds * 1000).toISOString().split('T')[0] : '',
+             steps: todo.steps || [],
+             observations: todo.observations || ''
+         });
+         setIsModalOpen(true);
+     };
+
+     const handleCloseModal = () => {
+         setIsModalOpen(false);
+         setCurrentTodo(null);
+     };
+
+     // Funções de CRUD no Firestore
+     const handleSaveTodo = async () => {
+         if (!formData.title.trim()) {
+             alert('O título é obrigatório.');
+             return;
+         }
+
+         const dataToSave = {
+             ...formData,
+             dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
+         };
+
+         if (currentTodo) { // Atualizar
+             const todoRef = doc(db, `users/${userId}/todos`, currentTodo.id);
+             await updateDoc(todoRef, dataToSave);
+         } else { // Criar
+             await addDoc(collection(db, `users/${userId}/todos`), {
+                 ...dataToSave,
+                 createdAt: serverTimestamp(),
+             });
+         }
+         handleCloseModal();
+     };
+
+     const handleDeleteTodo = async () => {
+         if (currentTodo && window.confirm("Tem a certeza que quer apagar este afazer?")) {
+             await deleteDoc(doc(db, `users/${userId}/todos`, currentTodo.id));
+             handleCloseModal();
+         }
+     };
+    
+     // Funções de manipulação das etapas (steps)
+     const handleAddStep = () => {
+         if (!newStepText.trim()) return;
+         const newStep = { name: newStepText, completed: false };
+         setFormData(prev => ({ ...prev, steps: [...prev.steps, newStep] }));
+         setNewStepText('');
+     };
+
+     const handleToggleStep = (indexToToggle) => {
+         const updatedSteps = formData.steps.map((step, index) =>
+             index === indexToToggle ? { ...step, completed: !step.completed } : step
+         );
+         setFormData(prev => ({ ...prev, steps: updatedSteps }));
+     };
+    
+     const handleDeleteStep = (indexToDelete) => {
+        const updatedSteps = formData.steps.filter((_, index) => index !== indexToDelete);
+        setFormData(prev => ({...prev, steps: updatedSteps}));
+     }
+
      return (
          <div className="p-4 md:p-8">
-             <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
-                  <h1 className="text-3xl font-bold text-gray-800">Afazeres</h1>
+             {isModalOpen && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                     <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                         <h2 className="text-2xl font-bold">{currentTodo ? 'Editar Afazer' : 'Novo Afazer'}</h2>
+                         {/* Título */}
+                         <input type="text" placeholder="Título do afazer..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2 border rounded-md"/>
+                         {/* Responsável e Prazo */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <select value={formData.responsible} onChange={e => setFormData({...formData, responsible: e.target.value})} className="w-full p-2 border rounded-md">
+                                 <option value="">Sem responsável</option>
+                                 <option value="Karol">Karol</option>
+                                 <option value="Raul">Raul</option>
+                             </select>
+                             <input type="date" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} className="w-full p-2 border rounded-md"/>
+                         </div>
+                        
+                        {/* Seção de Etapas (Aparece após criar o card) */}
+                        {currentTodo && (
+                            <div className="space-y-2 pt-4 border-t">
+                                <h3 className="text-lg font-semibold">Etapas</h3>
+                                <div className="flex gap-2">
+                                    <input type="text" placeholder="Nova etapa..." value={newStepText} onChange={e => setNewStepText(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddStep()} className="flex-grow p-2 border rounded-md"/>
+                                    <button onClick={handleAddStep} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Adicionar</button>
+                                </div>
+                                <div className="space-y-1">
+                                    {formData.steps.map((step, index) => (
+                                        <div key={index} className="flex items-center gap-3 p-1 group">
+                                            <input type="checkbox" checked={step.completed} onChange={() => handleToggleStep(index)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
+                                            <span className={`flex-grow ${step.completed ? 'line-through text-gray-400' : ''}`}>{step.name}</span>
+                                            <button onClick={() => handleDeleteStep(index)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs">
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Seção de Observações (Aparece após criar o card) */}
+                        {currentTodo && (
+                             <div className="space-y-2 pt-4 border-t">
+                                <h3 className="text-lg font-semibold">Observações</h3>
+                                <textarea placeholder="Adicione notas aqui..." value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="w-full p-2 border rounded-md h-24"></textarea>
+                            </div>
+                        )}
+
+                         {/* Botões de Ação */}
+                         <div className="flex justify-between items-center pt-4 border-t">
+                             {currentTodo ? (
+                                 <button onClick={handleDeleteTodo} className="py-2 px-4 rounded-md text-white bg-red-600 hover:bg-red-700">Apagar</button>
+                             ) : <div></div>}
+                             <div className="flex justify-end gap-4">
+                                 <button onClick={handleCloseModal} className="py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                                 <button onClick={handleSaveTodo} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">{currentTodo ? 'Salvar' : 'Criar'}</button>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             )}
+             <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center mb-8">
+                 <h1 className="text-3xl font-bold text-gray-800">Afazeres</h1>
+                 <button onClick={handleOpenCreateModal} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                     <i className="fas fa-plus mr-2"></i>Criar Novo Afazer
+                 </button>
              </header>
-             <div className="bg-white p-6 rounded-xl shadow-lg">
-                 <p className="text-center">Funcionalidade de Afazeres em construção.</p>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {todos.map(todo => (
+                     <div key={todo.id} onClick={() => handleOpenEditModal(todo)} className="bg-white p-6 rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-shadow space-y-3">
+                         <h3 className="font-bold text-lg text-gray-800">{todo.title}</h3>
+                         <div className="flex flex-wrap gap-2 text-xs">
+                             {todo.responsible && (
+                                 <span className={`px-2 py-1 rounded-full text-white ${todo.responsible === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>
+                                     <i className="fas fa-user mr-1"></i>{todo.responsible}
+                                 </span>
+                             )}
+                             {todo.dueDate && (
+                                 <span className="px-2 py-1 rounded-full bg-gray-200 text-gray-700">
+                                     <i className="fas fa-calendar-alt mr-1"></i>{new Date(todo.dueDate.seconds * 1000).toLocaleDateString('pt-BR')}
+                                 </span>
+                             )}
+                         </div>
+                     </div>
+                 ))}
              </div>
          </div>
      );
