@@ -737,6 +737,7 @@ const FinanceTracker = ({ db, userId }) => {
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
+  // CORRIGIDO: Removida a dependência 'knownClassifications' para evitar o loop infinito.
   useEffect(() => {
     if (!db || !userId) return;
 
@@ -787,8 +788,9 @@ const FinanceTracker = ({ db, userId }) => {
     await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
     setParsingMessage({ message: "Transação apagada.", type: 'success' });
   };
-
-
+  
+  // CORRIGIDO: O processamento dos dados agora ocorre fora do useEffect,
+  // reagindo corretamente às atualizações de 'transactions' e 'knownClassifications'.
   const processedTransactions = transactions.map(t => ({
     ...t,
     category: t.category || knownClassifications[t.description] || null
@@ -978,7 +980,7 @@ const FinanceTracker = ({ db, userId }) => {
             <section className="bg-white p-6 rounded-xl shadow-lg">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">Histórico ({unclassifiedCount} por classificar)</h2>
-                <button onClick={exportClassifiedData} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700">Exportar</button>
+                {/* <button onClick={exportClassifiedData} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700">Exportar</button> */}
               </div>
               <div className="flex flex-wrap gap-2 mb-4">
                 <button onClick={() => setClassificationFilter('Todos')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Todos' ? 'bg-gray-600 text-white' : 'bg-gray-200'}`}>Todas</button>
