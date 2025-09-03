@@ -673,7 +673,6 @@ import React, { useState, useEffect, useRef } from 'react';
      const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
      const totalBalance = totalRevenue + totalExpense;
     
-     // MODIFICADO: Exclui a categoria "Investimento" do gráfico de barras
      const barChartData = Object.entries(
          transactionsForSummary
              .filter(t => t.type === 'despesa' && t.category && t.category !== 'Investimento')
@@ -684,7 +683,6 @@ import React, { useState, useEffect, useRef } from 'react';
              }, {})
      ).map(([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total);
 
-     // MODIFICADO: Exclui "Rendimentos" e "Investimentos" do gráfico mensal
      const monthlyData = transactionsForSummary.reduce((acc, t) => {
          if (!t.timestamp) return acc;
          const monthYear = new Intl.DateTimeFormat('pt-BR', { year: '2-digit', month: 'short' }).format(t.timestamp.toDate());
@@ -716,7 +714,6 @@ import React, { useState, useEffect, useRef } from 'react';
          }, {});
      const monthlyFixedCostChartData = Object.values(monthlyFixedCostData).reverse();
     
-     // NOVO: Cálculos para os totais de investimento e rendimentos
      const totalInvestido = transactionsForSummary.filter(t => t.category === 'Investimento').reduce((sum, t) => sum + Math.abs(t.amount), 0);
      const totalRendimentos = transactionsForSummary.filter(t => t.category === 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
 
@@ -781,17 +778,6 @@ import React, { useState, useEffect, useRef } from 'react';
                  </div>
              </header>
              <div className="space-y-8 mt-8">
-                 <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
-                   <h2 className="text-xl font-bold">Progresso de Classificação</h2>
-                   <div className="space-y-2">
-                     <p className="text-sm">Karol: {classifiedKarol}/{totalKarol} ({karolProgress.toFixed(0)}%)</p>
-                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${karolProgress}%` }}></div></div>
-                   </div>
-                   <div className="space-y-2">
-                     <p className="text-sm">Raul: {classifiedRaul}/{totalRaul} ({raulProgress.toFixed(0)}%)</p>
-                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-400 h-2.5 rounded-full" style={{ width: `${raulProgress}%` }}></div></div>
-                   </div>
-                 </div>
                  <div className="flex justify-center gap-4 bg-white p-2 rounded-xl shadow-lg">
                      <button onClick={() => setActiveTab('lancamentos')} className={`py-2 px-4 rounded-md text-sm font-medium transition ${activeTab === 'lancamentos' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-200'}`}>
                          Lançamentos
@@ -801,8 +787,20 @@ import React, { useState, useEffect, useRef } from 'react';
                      </button>
                  </div>
                  {activeTab === 'lancamentos' && (
-                     <>
-                          <section className="grid md:grid-cols-3 gap-6">
+                     // MODIFICADO: Barra de progresso agora está dentro da aba de lançamentos
+                     <div className="space-y-8">
+                         <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
+                           <h2 className="text-xl font-bold">Progresso de Classificação</h2>
+                           <div className="space-y-2">
+                             <p className="text-sm">Karol: {classifiedKarol}/{totalKarol} ({karolProgress.toFixed(0)}%)</p>
+                             <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${karolProgress}%` }}></div></div>
+                           </div>
+                           <div className="space-y-2">
+                             <p className="text-sm">Raul: {classifiedRaul}/{totalRaul} ({raulProgress.toFixed(0)}%)</p>
+                             <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-400 h-2.5 rounded-full" style={{ width: `${raulProgress}%` }}></div></div>
+                           </div>
+                         </div>
+                         <section className="grid md:grid-cols-3 gap-6">
                             <div className="bg-white p-6 rounded-xl shadow-lg text-center">
                               <h2 className="text-lg font-semibold text-gray-600">Receita Total</h2>
                               <p className="mt-2 text-3xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
@@ -855,88 +853,7 @@ import React, { useState, useEffect, useRef } from 'react';
                                      <div>
                                          <p className="font-medium">{t.description}</p>
                                          <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
-                                         <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                             {t.importer && <span className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>}
-                                             <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300 p-1">
-                                                 <option value="">Classificar</option>
-                                                 {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => ( <option key={cat} value={cat}>{cat}</option> ))}
-                                             </select>
-                                             <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1">Apagar</button>
-                                         </div>
-                                     </div>
-                                     <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
-                                 </div>
-                             ))}
-                         </section>
-                     </>
-                 )}
-                
-                 {activeTab === 'graficos' && (
-                     <div className="space-y-8">
-                         {/* NOVO: Cards de Total Investido e Rendimentos */}
-                         <section className="grid md:grid-cols-2 gap-6">
-                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
-                              <h2 className="text-lg font-semibold text-gray-600">Total Investido</h2>
-                              <p className="mt-2 text-3xl font-bold text-indigo-600">{formatCurrency(totalInvestido)}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
-                              <h2 className="text-lg font-semibold text-gray-600">Total de Rendimentos</h2>
-                              <p className="mt-2 text-3xl font-bold text-teal-600">{formatCurrency(totalRendimentos)}</p>
-                            </div>
-                         </section>
-
-                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                             <h2 className="text-2xl font-bold mb-4 text-center">Receita vs. Despesa Mensal</h2>
-                             <ResponsiveContainer width="100%" height={300}>
-                                 <LineChart data={monthlyChartData}>
-                                     <CartesianGrid strokeDasharray="3 3" />
-                                     <XAxis dataKey="name" />
-                                     <YAxis tickFormatter={formatCurrency} />
-                                     <Tooltip formatter={(value) => formatCurrency(value)} />
-                                     <Legend />
-                                     <Line type="monotone" dataKey="Receitas" stroke="#22c55e" strokeWidth={2} />
-                                     <Line type="monotone" dataKey="Despesas" stroke="#ef4444" strokeWidth={2} />
-                                 </LineChart>
-                             </ResponsiveContainer>
-                         </section>
-                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                             <div className="flex justify-center items-center mb-4 relative">
-                                 <h2 className="text-2xl font-bold">Gastos Fixos Mensais</h2>
-                                 <button onClick={() => setIsFixedCostFilterOpen(true)} className="absolute right-0 p-2 rounded-full text-indigo-600 hover:bg-indigo-100">
-                                     <i className="fas fa-filter"></i>
-                                 </button>
-                             </div>
-                             <ResponsiveContainer width="100%" height={300}>
-                                  <LineChart data={monthlyFixedCostChartData}>
-                                     <CartesianGrid strokeDasharray="3 3" />
-                                     <XAxis dataKey="name" />
-                                     <YAxis tickFormatter={formatCurrency}/>
-                                     <Tooltip formatter={(value) => formatCurrency(value)} />
-                                     <Legend />
-                                     {selectedFixedCosts.map((cost, index) => (
-                                         <Line key={cost} type="monotone" dataKey={cost} name={cost} stroke={fixedCostColors[index % fixedCostColors.length]} strokeWidth={2} />
-                                     ))}
-                                 </LineChart>
-                             </ResponsiveContainer>
-                         </section>
-                         <section className="bg-white p-6 rounded-xl shadow-lg">
-                             <h2 className="text-2xl font-bold mb-4 text-center">Total por Categoria</h2>
-                             <ResponsiveContainer width="100%" height={400}>
-                                 <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                     <CartesianGrid strokeDasharray="3 3" />
-                                     <XAxis type="number" tickFormatter={formatCurrency}/>
-                                     <YAxis type="category" dataKey="name" width={120} interval={0} />
-                                     <Tooltip formatter={(value) => formatCurrency(value)} />
-                                     <Bar dataKey="total" fill="#8884d8" name="Total Gasto" />
-                                 </BarChart>
-                             </ResponsiveContainer>
-                         </section>
-                     </div>
-                 )}
-             </div>
-         </div>
-     );
- };
+               __truncated__
 
  // --- TELA DE LOGIN E REGISTO ---
  const AuthScreen = ({ auth }) => {
