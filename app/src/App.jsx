@@ -539,7 +539,6 @@ const CalendarView = ({ db, userId }) => {
 };
 
 
-
 // --- FINANCEIRO (CÓDIGO COMPLETO) ---
 const FinanceTracker = ({ db, userId }) => {
     const [transactions, setTransactions] = useState([]);
@@ -626,8 +625,8 @@ const FinanceTracker = ({ db, userId }) => {
         setParsingMessage({ message: "Transação apagada.", type: 'success' });
     };
 
-    const parseCsvText = (text, isClassified = false) => { /* ... sua lógica de CSV ... */ return []; };
-    const handleCsvUpload = async () => { /* ... sua lógica de CSV ... */ };
+    const parseCsvText = (text, isClassified = false) => { return []; };
+    const handleCsvUpload = async () => { /* ... lógica de importação de CSV ... */ };
     
     const exportClassifiedData = () => {
         const header = "Data;Descrição;Tipo;Valor;Categoria;Importador";
@@ -784,13 +783,11 @@ const FinanceTracker = ({ db, userId }) => {
                              <p className={`mt-2 text-3xl font-bold ${totalBalance >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>{formatCurrency(totalBalance)}</p>
                            </div>
                         </section>
-
                         <section className="bg-white p-6 rounded-xl shadow-lg text-center">
                            <button onClick={() => setIsAddTransactionPopupOpen(true)} className="w-full md:w-auto py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
                              Adicionar Nova Transação
                            </button>
                         </section>
-                        
                         <section className="bg-white p-6 rounded-xl shadow-lg">
                           <h2 className="text-2xl font-bold mb-4">Importar Extratos</h2>
                             <div className="flex-1 space-y-4 border p-4 rounded-md">
@@ -893,6 +890,7 @@ const FinanceTracker = ({ db, userId }) => {
         </div>
     );
 };
+
 // --- TELA DE LOGIN E REGISTO ---
 const AuthScreen = ({ auth }) => {
     const [email, setEmail] = useState('');
@@ -940,6 +938,7 @@ const AuthScreen = ({ auth }) => {
             </div>
         </div>
     );
+};
 
 
 // --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
