@@ -539,7 +539,7 @@ import React, { useState, useEffect, useRef } from 'react';
  };
 
 
- // --- FINANCEIRO (CÓDIGO COMPLETO) ---
+// --- FINANCEIRO (CÓDIGO COMPLETO) ---
  const FinanceTracker = ({ db, userId }) => {
      const [transactions, setTransactions] = useState([]);
      const [description, setDescription] = useState('');
@@ -734,6 +734,34 @@ import React, { useState, useEffect, useRef } from 'react';
 
      return (
          <div className="p-4 md:p-8">
+             {/* NOVO: Modal de Filtro de Custos Fixos */}
+             {isFixedCostFilterOpen && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                     <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
+                         <h3 className="text-xl font-bold">Filtrar Custos Fixos</h3>
+                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-2">
+                             {expenseCategories.map(cat => (
+                                 <label key={cat} className="flex items-center space-x-3 p-2 rounded hover:bg-gray-100 cursor-pointer">
+                                     <input
+                                         type="checkbox"
+                                         checked={selectedFixedCosts.includes(cat)}
+                                         onChange={() => handleFixedCostSelection(cat)}
+                                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                     />
+                                     <span>{cat}</span>
+                                 </label>
+                             ))}
+                         </div>
+                         <button
+                             onClick={() => setIsFixedCostFilterOpen(false)}
+                             className="mt-4 w-full py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300"
+                         >
+                             Fechar
+                         </button>
+                     </div>
+                 </div>
+             )}
+
              <header className="p-6 bg-white rounded-xl shadow-lg text-center space-y-4">
                  <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
                  <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
@@ -857,7 +885,10 @@ import React, { useState, useEffect, useRef } from 'react';
                          <section className="bg-white p-6 rounded-xl shadow-lg">
                              <div className="flex justify-center items-center mb-4 relative">
                                  <h2 className="text-2xl font-bold">Gastos Fixos Mensais</h2>
-                                 <button onClick={() => setIsFixedCostFilterOpen(true)} className="absolute right-0 py-1 px-3 rounded-md text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700">Filtrar</button>
+                                 {/* MODIFICADO: Botão de texto para ícone */}
+                                 <button onClick={() => setIsFixedCostFilterOpen(true)} className="absolute right-0 p-2 rounded-full text-indigo-600 hover:bg-indigo-100">
+                                     <i className="fas fa-filter"></i>
+                                 </button>
                              </div>
                              <ResponsiveContainer width="100%" height={300}>
                                   <LineChart data={monthlyFixedCostChartData}>
