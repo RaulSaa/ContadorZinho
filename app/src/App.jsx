@@ -194,7 +194,9 @@ const ShoppingList = ({ db, userId }) => {
             )}
             <header className="p-6 bg-white rounded-xl shadow-lg flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-800">Lista de Compras</h1>
-                <button onClick={() => setIsEditModalOpen(true)} className="py-2 px-4 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Editar</button>
+                <button onClick={() => setIsEditModalOpen(true)} className="p-2 h-10 w-10 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-600">
+                    <i className="fas fa-cog text-xl"></i>
+                </button>
             </header>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -202,7 +204,7 @@ const ShoppingList = ({ db, userId }) => {
                     <div key={cat.id} className="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                         <h3 className="text-xl font-bold mb-4">{cat.name}</h3>
                         <div className="space-y-3 flex-grow">
-                            {cat.items?.map((item, index) => (
+                            {cat.items?.sort((a,b) => a.purchased - b.purchased).map((item, index) => (
                                 <div key={index} className="flex items-center space-x-3 group">
                                     <input type="checkbox" checked={item.purchased} onChange={() => handleToggleItem(cat.id, item)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
                                     <span className={`flex-grow ${item.purchased ? 'line-through text-gray-400' : ''}`}>{item.name}</span>
@@ -223,6 +225,11 @@ const ShoppingList = ({ db, userId }) => {
                                 onKeyPress={(e) => e.key === 'Enter' && handleAddItem(cat.id)}
                                 className="w-full bg-transparent focus:outline-none"
                              />
+                             {newItem[cat.id] && (
+                                <button onClick={() => handleAddItem(cat.id)} className="text-green-500 hover:text-green-700 p-1">
+                                    <i className="fas fa-check"></i>
+                                </button>
+                             )}
                         </div>
                     </div>
                 ))}
