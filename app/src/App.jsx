@@ -539,7 +539,7 @@ import React, { useState, useEffect, useRef } from 'react';
  };
 
 
-// --- FINANCEIRO (CÓDIGO COMPLETO) ---
+// --- FINANCEIRO (CÓDIGO COMPLETO E ATUALIZADO) ---
  const FinanceTracker = ({ db, userId }) => {
      const [transactions, setTransactions] = useState([]);
      const [description, setDescription] = useState('');
@@ -673,9 +673,10 @@ import React, { useState, useEffect, useRef } from 'react';
      const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
      const totalBalance = totalRevenue + totalExpense;
     
+     // MODIFICADO: Exclui a categoria "Investimento" do gráfico de barras
      const barChartData = Object.entries(
          transactionsForSummary
-             .filter(t => t.type === 'despesa' && t.category)
+             .filter(t => t.type === 'despesa' && t.category && t.category !== 'Investimento')
              .reduce((acc, t) => {
                  if (!acc[t.category]) acc[t.category] = 0;
                  acc[t.category] += Math.abs(t.amount);
@@ -683,15 +684,16 @@ import React, { useState, useEffect, useRef } from 'react';
              }, {})
      ).map(([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total);
 
+     // MODIFICADO: Exclui "Rendimentos" e "Investimentos" do gráfico mensal
      const monthlyData = transactionsForSummary.reduce((acc, t) => {
          if (!t.timestamp) return acc;
          const monthYear = new Intl.DateTimeFormat('pt-BR', { year: '2-digit', month: 'short' }).format(t.timestamp.toDate());
          if (!acc[monthYear]) {
              acc[monthYear] = { name: monthYear, Receitas: 0, Despesas: 0 };
          }
-         if (t.type === 'receita') {
+         if (t.type === 'receita' && t.category !== 'Rendimentos') {
              acc[monthYear].Receitas += t.amount;
-         } else {
+         } else if (t.type === 'despesa' && t.category !== 'Investimento') {
              acc[monthYear].Despesas += Math.abs(t.amount);
          }
          return acc;
@@ -713,6 +715,10 @@ import React, { useState, useEffect, useRef } from 'react';
              return acc;
          }, {});
      const monthlyFixedCostChartData = Object.values(monthlyFixedCostData).reverse();
+    
+     // NOVO: Cálculos para os totais de investimento e rendimentos
+     const totalInvestido = transactionsForSummary.filter(t => t.category === 'Investimento').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+     const totalRendimentos = transactionsForSummary.filter(t => t.category === 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
 
      const handleFixedCostSelection = (category) => {
          setSelectedFixedCosts(prev =>
@@ -734,7 +740,6 @@ import React, { useState, useEffect, useRef } from 'react';
 
      return (
          <div className="p-4 md:p-8">
-             {/* NOVO: Modal de Filtro de Custos Fixos */}
              {isFixedCostFilterOpen && (
                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                      <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
@@ -868,6 +873,18 @@ import React, { useState, useEffect, useRef } from 'react';
                 
                  {activeTab === 'graficos' && (
                      <div className="space-y-8">
+                         {/* NOVO: Cards de Total Investido e Rendimentos */}
+                         <section className="grid md:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+                              <h2 className="text-lg font-semibold text-gray-600">Total Investido</h2>
+                              <p className="mt-2 text-3xl font-bold text-indigo-600">{formatCurrency(totalInvestido)}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+                              <h2 className="text-lg font-semibold text-gray-600">Total de Rendimentos</h2>
+                              <p className="mt-2 text-3xl font-bold text-teal-600">{formatCurrency(totalRendimentos)}</p>
+                            </div>
+                         </section>
+
                          <section className="bg-white p-6 rounded-xl shadow-lg">
                              <h2 className="text-2xl font-bold mb-4 text-center">Receita vs. Despesa Mensal</h2>
                              <ResponsiveContainer width="100%" height={300}>
@@ -885,7 +902,6 @@ import React, { useState, useEffect, useRef } from 'react';
                          <section className="bg-white p-6 rounded-xl shadow-lg">
                              <div className="flex justify-center items-center mb-4 relative">
                                  <h2 className="text-2xl font-bold">Gastos Fixos Mensais</h2>
-                                 {/* MODIFICADO: Botão de texto para ícone */}
                                  <button onClick={() => setIsFixedCostFilterOpen(true)} className="absolute right-0 p-2 rounded-full text-indigo-600 hover:bg-indigo-100">
                                      <i className="fas fa-filter"></i>
                                  </button>
