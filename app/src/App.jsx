@@ -890,7 +890,6 @@ const FinanceTracker = ({ db, userId }) => {
         </div>
     );
 };
-
 // --- TELA DE LOGIN E REGISTO ---
 const AuthScreen = ({ auth }) => {
     const [email, setEmail] = useState('');
@@ -939,84 +938,4 @@ const AuthScreen = ({ auth }) => {
         </div>
     );
 };
-
-
-// --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
-function App() {
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [userId, setUserId] = useState(null);
-    const [view, setView] = useState('finance');
-    const [isAuthReady, setIsAuthReady] = useState(false);
-
-    useEffect(() => {
-        try {
-            const firebaseConfig = {
-                apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-                authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-                projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-                storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-                messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-                appId: import.meta.env.VITE_FIREBASE_APP_ID,
-                measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-            };
-            
-            if (!firebaseConfig.apiKey) console.error("Chaves do Firebase não foram carregadas.");
-
-            const firebaseApp = initializeApp(firebaseConfig);
-            const firebaseAuth = getAuth(firebaseApp);
-            const firestoreDb = getFirestore(firebaseApp);
-            setDb(firestoreDb);
-            setAuth(firebaseAuth);
-
-            onAuthStateChanged(firebaseAuth, (user) => {
-                if (user) {
-                    setUserId(user.uid);
-                    if ("Notification" in window && firebaseConfig.apiKey) {
-                        const messaging = getMessaging(firebaseApp);
-                        const requestPermissionAndToken = async (currentUserId) => {
-                            try {
-                                const permission = await Notification.requestPermission();
-                                if (permission === 'granted') {
-                                    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-                                    if (!vapidKey) return;
-                                    const currentToken = await getToken(messaging, { vapidKey });
-                                    if (currentToken) {
-                                        const tokenRef = doc(db, `users/${currentUserId}/fcmTokens`, currentToken);
-                                        await setDoc(tokenRef, { token: currentToken, createdAt: serverTimestamp() });
-                                    }
-                                }
-                            } catch (err) { console.error('Erro ao obter token.', err); }
-                        };
-                        requestPermissionAndToken(user.uid);
-                    }
-                } else {
-                    setUserId(null);
-                }
-                setIsAuthReady(true);
-            });
-        } catch (e) {
-            console.error("Erro na inicialização do Firebase:", e);
-            setIsAuthReady(true); 
-        }
-    }, []);
-
-    if (!isAuthReady) return <LoadingScreen />;
-    if (!userId) return <AuthScreen auth={auth} />;
-    
-    return (
-        <div className="relative min-h-screen md:flex">
-            <Sidebar view={view} setView={setView} auth={auth} />
-            <main className="flex-1 md:ml-64 bg-gray-100">
-                {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
-                {view === 'shopping' && <ShoppingList db={db} userId={userId} />}
-                {view === 'todo' && <TodoList />}
-                {view === 'calendar' && <CalendarView db={db} userId={userId} />}
-            </main>
-             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-        </div>
-    );
-}
-
-export default App;
 
