@@ -736,8 +736,23 @@ const FinanceTracker = ({ db, userId }) => {
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
+  const [existingTransactionIds, setExistingTransactionIds] = useState(new Set()); // NOVO ESTADO
 
-  // SUA LÓGICA PARA LER O TEXTO DO CSV
+  // --- NOVA FUNÇÃO ---
+  // Cria um identificador único para uma transação para evitar duplicatas.
+  const createTransactionId = (transaction) => {
+    // Converte o timestamp para um formato padronizado (ISO String) para consistência
+    const datePart = new Date(transaction.timestamp).toISOString().split('T')[0];
+    // Remove espaços extras e converte para minúsculas para evitar falsos negativos
+    const descriptionPart = transaction.description.trim().toLowerCase();
+    // Formata o valor com duas casas decimais
+    const amountPart = Number(transaction.amount).toFixed(2);
+    // O responsável (importer) também é crucial para a unicidade
+    const importerPart = transaction.importer || '';
+
+    return `${datePart}_${descriptionPart}_${amountPart}_${importerPart}`;
+  };
+
   const parseCsvText = (text, isClassified = false) => {
     const transactions = [];
     const lines = text.split('\n').filter(line => line.trim() !== '');
@@ -754,12 +769,10 @@ const FinanceTracker = ({ db, userId }) => {
           const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
           const category = parts[4].trim();
           const importer = parts[5].trim();
-
           const amount = parseFloat(valueString);
           if (!isNaN(amount)) {
             const [day, month, year] = dateString.split('/');
-            const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`); // Adiciona hora para evitar erros de fuso
-            
+            const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`);
             transactions.push({
               timestamp: transactionDate,
               description: description,
@@ -772,36 +785,33 @@ const FinanceTracker = ({ db, userId }) => {
         }
       }
     } else {
-        if (lines.length <= 3) return transactions; // Ignora as 3 primeiras linhas de cabeçalho
-        for (let i = 3; i < lines.length; i++) {
-          const line = lines[i];
-          const parts = line.split(';');
-          if (parts.length >= 4) {
-            const dateString = parts[0].trim();
-            const description = parts[1].trim();
-            const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
-
-            const amount = parseFloat(valueString);
-            
-            if (!isNaN(amount)) {
-              const type = amount >= 0 ? 'receita' : 'despesa';
-              const [day, month, year] = dateString.split('-');
-              const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`); // Adiciona hora para evitar erros de fuso
-
-              transactions.push({
-                timestamp: transactionDate,
-                description: description,
-                amount: amount,
-                type: type,
-              });
-            }
+      if (lines.length <= 3) return transactions;
+      for (let i = 3; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = line.split(';');
+        if (parts.length >= 4) {
+          const dateString = parts[0].trim();
+          const description = parts[1].trim();
+          const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
+          const amount = parseFloat(valueString);
+          if (!isNaN(amount)) {
+            const type = amount >= 0 ? 'receita' : 'despesa';
+            const [day, month, year] = dateString.split('-');
+            const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`);
+            transactions.push({
+              timestamp: transactionDate,
+              description: description,
+              amount: amount,
+              type: type,
+            });
           }
         }
+      }
     }
     return transactions;
   };
 
-  // FUNÇÃO ATUALIZADA QUE USA A LÓGICA ACIMA E ENVIA PARA O FIREBASE
+  // --- FUNÇÃO DE IMPORTAÇÃO ATUALIZADA ---
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -812,43 +822,66 @@ const FinanceTracker = ({ db, userId }) => {
     reader.onload = async (e) => {
       try {
         const text = e.target.result;
-        const newTransactions = parseCsvText(text, isClassifiedImport);
+        const parsedTransactions = parseCsvText(text, isClassifiedImport);
 
-        if (newTransactions.length === 0) {
+        if (parsedTransactions.length === 0) {
           throw new Error("Nenhuma transação válida encontrada no arquivo.");
         }
 
-        // Prepara para enviar em lote para o Firebase
-        const batch = writeBatch(db);
-        newTransactions.forEach(transaction => {
-          const docRef = doc(collection(db, `users/${userId}/transactions`));
-          const dataToSave = {
-              ...transaction,
-              importer: isClassifiedImport ? transaction.importer : importer, // Garante que o importador seja salvo
+        let transactionsToAdd = [];
+        let skippedCount = 0;
+
+        parsedTransactions.forEach(transaction => {
+          const transactionWithImporter = {
+            ...transaction,
+            importer: isClassifiedImport ? transaction.importer : importer,
           };
-          batch.set(docRef, dataToSave);
+          const uniqueId = createTransactionId(transactionWithImporter);
+
+          if (!existingTransactionIds.has(uniqueId)) {
+            transactionsToAdd.push(transactionWithImporter);
+          } else {
+            skippedCount++;
+          }
         });
 
-        await batch.commit(); // Envia tudo de uma vez
+        if (transactionsToAdd.length === 0) {
+          setParsingMessage({
+            message: `Nenhuma transação nova encontrada. ${skippedCount} duplicada(s) foram ignorada(s).`,
+            type: 'success'
+          });
+          return;
+        }
 
-        setParsingMessage({ message: `${newTransactions.length} transações importadas com sucesso!`, type: 'success' });
+        const batch = writeBatch(db);
+        transactionsToAdd.forEach(transaction => {
+          const docRef = doc(collection(db, `users/${userId}/transactions`));
+          batch.set(docRef, transaction);
+        });
+
+        await batch.commit();
+
+        setParsingMessage({
+          message: `${transactionsToAdd.length} transações novas importadas. ${skippedCount} duplicada(s) foram ignorada(s).`,
+          type: 'success'
+        });
+
       } catch (error) {
         console.error("Erro ao processar o arquivo CSV:", error);
         setParsingMessage({ message: `Erro: ${error.message}`, type: 'error' });
       } finally {
         setIsParsing(false);
+        event.target.value = null;
       }
     };
-
     reader.onerror = () => {
       setParsingMessage({ message: "Não foi possível ler o arquivo.", type: 'error' });
       setIsParsing(false);
     };
-
-    reader.readAsText(file, 'UTF-8'); // Lê o arquivo como texto
-    event.target.value = null; // Limpa o input
+    reader.readAsText(file, 'UTF-8');
   };
-  
+
+  // --- USEEFFECT ATUALIZADO ---
   useEffect(() => {
     if (!db || !userId) return;
 
@@ -863,7 +896,15 @@ const FinanceTracker = ({ db, userId }) => {
 
     const transactionsCollection = collection(db, `users/${userId}/transactions`);
     const unsubscribeTransactions = onSnapshot(query(transactionsCollection), (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTransactions(allTransactions);
+
+      const ids = new Set(allTransactions.map(t => createTransactionId({
+        ...t,
+        timestamp: t.timestamp?.toDate()
+      })));
+      setExistingTransactionIds(ids);
+
       setLoading(false);
     });
 
@@ -873,6 +914,7 @@ const FinanceTracker = ({ db, userId }) => {
     };
   }, [db, userId]);
 
+
   const addTransaction = (e, responsible) => {
     e.preventDefault();
     if (!description || !amount || !manualDate) {
@@ -880,11 +922,11 @@ const FinanceTracker = ({ db, userId }) => {
       return;
     }
     const data = {
-        description,
-        amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
-        type,
-        importer: responsible,
-        timestamp: new Date(manualDate + 'T12:00:00') // Adiciona hora para evitar problemas de fuso
+      description,
+      amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
+      type,
+      importer: responsible,
+      timestamp: new Date(manualDate + 'T12:00:00')
     };
     addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
       setParsingMessage({ message: "Transação adicionada com sucesso!", type: 'success' });
@@ -906,12 +948,11 @@ const FinanceTracker = ({ db, userId }) => {
 
   const deleteTransaction = async (transactionId) => {
     if (window.confirm("Tem a certeza que quer apagar esta transação?")) {
-        await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
-        setParsingMessage({ message: "Transação apagada.", type: 'success' });
+      await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
+      setParsingMessage({ message: "Transação apagada.", type: 'success' });
     }
   };
 
-  // O resto do seu componente continua igual...
   const processedTransactions = transactions.map(t => ({
     ...t,
     category: t.category || knownClassifications[t.description] || null
@@ -1005,9 +1046,9 @@ const FinanceTracker = ({ db, userId }) => {
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
             <h2 className="text-2xl font-bold">Nova Transação</h2>
             <form onSubmit={(e) => {
-                e.preventDefault();
-                setIsResponsiblePopupOpen(true);
-              }}>
+              e.preventDefault();
+              setIsResponsiblePopupOpen(true);
+            }}>
               <div className="space-y-4">
                 <input type="text" placeholder="Descrição" value={description} onChange={e => setDescription(e.target.value)} required className="w-full p-2 border rounded-md" />
                 <input type="number" step="0.01" placeholder="Valor" value={amount} onChange={e => setAmount(e.target.value)} required className="w-full p-2 border rounded-md" />
@@ -1027,18 +1068,18 @@ const FinanceTracker = ({ db, userId }) => {
       )}
 
       {isResponsiblePopupOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm space-y-4">
-                  <h2 className="text-xl font-bold text-center">Quem é o responsável?</h2>
-                  <div className="flex justify-center gap-4">
-                    <button onClick={(e) => addTransaction(e, 'Karol')} className="py-3 px-6 rounded-md text-white bg-purple-600 hover:bg-purple-700">Karol</button>
-                    <button onClick={(e) => addTransaction(e, 'Raul')} className="py-3 px-6 rounded-md text-white bg-blue-400 hover:bg-blue-500">Raul</button>
-                  </div>
-                  <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full mt-4 py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Voltar</button>
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm space-y-4">
+            <h2 className="text-xl font-bold text-center">Quem é o responsável?</h2>
+            <div className="flex justify-center gap-4">
+              <button onClick={(e) => addTransaction(e, 'Karol')} className="py-3 px-6 rounded-md text-white bg-purple-600 hover:bg-purple-700">Karol</button>
+              <button onClick={(e) => addTransaction(e, 'Raul')} className="py-3 px-6 rounded-md text-white bg-blue-400 hover:bg-blue-500">Raul</button>
+            </div>
+            <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full mt-4 py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Voltar</button>
           </div>
+        </div>
       )}
-      
+
       {isFixedCostFilterOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
