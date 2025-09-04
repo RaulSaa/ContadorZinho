@@ -710,6 +710,30 @@ const CalendarView = ({ db, userId }) => {
   );
 };
 
+// --- FUNÇÕES AUXILIARES DE DATA ---
+const formatDate = (date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const getPreviousMonthRange = () => {
+  const today = new Date();
+  const endOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+  const startOfPreviousMonth = new Date(endOfPreviousMonth.getFullYear(), endOfPreviousMonth.getMonth(), 1);
+  return {
+    start: formatDate(startOfPreviousMonth),
+    end: formatDate(endOfPreviousMonth),
+  };
+};
+
+const getLastSixMonthsRange = () => {
+  const today = new Date();
+  const endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+  const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
+  return {
+    start: formatDate(startDate),
+    end: formatDate(endDate),
+  };
+};
 
 // --- FINANCEIRO (CÓDIGO COMPLETO E CORRIGIDO) ---
 const FinanceTracker = ({ db, userId }) => {
@@ -729,27 +753,35 @@ const FinanceTracker = ({ db, userId }) => {
   const [knownClassifications, setKnownClassifications] = useState({});
   const [userFilter, setUserFilter] = useState('Todos');
   const [classificationFilter, setClassificationFilter] = useState('Todos');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [activeTab, setActiveTab] = useState('lancamentos');
   const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
-  const [existingTransactionIds, setExistingTransactionIds] = useState(new Set()); // NOVO ESTADO
+  const [existingTransactionIds, setExistingTransactionIds] = useState(new Set());
 
-  // --- NOVA FUNÇÃO ---
-  // Cria um identificador único para uma transação para evitar duplicatas.
+  // --- ESTADO INICIAL DAS DATAS (MÊS ANTERIOR POR PADRÃO) ---
+  const [startDate, setStartDate] = useState(getPreviousMonthRange().start);
+  const [endDate, setEndDate] = useState(getPreviousMonthRange().end);
+
+  // --- ATUALIZA DATAS QUANDO A ABA MUDA ---
+  useEffect(() => {
+    if (activeTab === 'lancamentos') {
+      const { start, end } = getPreviousMonthRange();
+      setStartDate(start);
+      setEndDate(end);
+    } else if (activeTab === 'graficos') {
+      const { start, end } = getLastSixMonthsRange();
+      setStartDate(start);
+      setEndDate(end);
+    }
+  }, [activeTab]);
+
   const createTransactionId = (transaction) => {
-    // Converte o timestamp para um formato padronizado (ISO String) para consistência
     const datePart = new Date(transaction.timestamp).toISOString().split('T')[0];
-    // Remove espaços extras e converte para minúsculas para evitar falsos negativos
     const descriptionPart = transaction.description.trim().toLowerCase();
-    // Formata o valor com duas casas decimais
     const amountPart = Number(transaction.amount).toFixed(2);
-    // O responsável (importer) também é crucial para a unicidade
     const importerPart = transaction.importer || '';
-
     return `${datePart}_${descriptionPart}_${amountPart}_${importerPart}`;
   };
 
@@ -773,83 +805,57 @@ const FinanceTracker = ({ db, userId }) => {
           if (!isNaN(amount)) {
             const [day, month, year] = dateString.split('/');
             const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`);
-            transactions.push({
-              timestamp: transactionDate,
-              description: description,
-              amount: amount,
-              type: type,
-              category: category,
-              importer: importer
-            });
+            transactions.push({ timestamp: transactionDate, description, amount, type, category, importer });
           }
         }
       }
     } else {
-      if (lines.length <= 3) return transactions;
-      for (let i = 3; i < lines.length; i++) {
-        const line = lines[i];
-        const parts = line.split(';');
-        if (parts.length >= 4) {
-          const dateString = parts[0].trim();
-          const description = parts[1].trim();
-          const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
-          const amount = parseFloat(valueString);
-          if (!isNaN(amount)) {
-            const type = amount >= 0 ? 'receita' : 'despesa';
-            const [day, month, year] = dateString.split('-');
-            const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`);
-            transactions.push({
-              timestamp: transactionDate,
-              description: description,
-              amount: amount,
-              type: type,
-            });
+        if (lines.length <= 3) return transactions;
+        for (let i = 3; i < lines.length; i++) {
+          const line = lines[i];
+          const parts = line.split(';');
+          if (parts.length >= 4) {
+            const dateString = parts[0].trim();
+            const description = parts[1].trim();
+            const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
+            const amount = parseFloat(valueString);
+            if (!isNaN(amount)) {
+              const type = amount >= 0 ? 'receita' : 'despesa';
+              const [day, month, year] = dateString.split('-');
+              const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`);
+              transactions.push({ timestamp: transactionDate, description, amount, type });
+            }
           }
         }
-      }
     }
     return transactions;
   };
 
-  // --- FUNÇÃO DE IMPORTAÇÃO ATUALIZADA ---
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     setIsParsing(true);
     const reader = new FileReader();
-
     reader.onload = async (e) => {
       try {
         const text = e.target.result;
         const parsedTransactions = parseCsvText(text, isClassifiedImport);
-
-        if (parsedTransactions.length === 0) {
-          throw new Error("Nenhuma transação válida encontrada no arquivo.");
-        }
-
+        if (parsedTransactions.length === 0) throw new Error("Nenhuma transação válida encontrada no arquivo.");
+        
         let transactionsToAdd = [];
         let skippedCount = 0;
-
         parsedTransactions.forEach(transaction => {
-          const transactionWithImporter = {
-            ...transaction,
-            importer: isClassifiedImport ? transaction.importer : importer,
-          };
+          const transactionWithImporter = { ...transaction, importer: isClassifiedImport ? transaction.importer : importer };
           const uniqueId = createTransactionId(transactionWithImporter);
-
           if (!existingTransactionIds.has(uniqueId)) {
             transactionsToAdd.push(transactionWithImporter);
           } else {
             skippedCount++;
           }
         });
-
+        
         if (transactionsToAdd.length === 0) {
-          setParsingMessage({
-            message: `Nenhuma transação nova encontrada. ${skippedCount} duplicada(s) foram ignorada(s).`,
-            type: 'success'
-          });
+          setParsingMessage({ message: `Nenhuma transação nova encontrada. ${skippedCount} duplicada(s) foram ignorada(s).`, type: 'success' });
           return;
         }
 
@@ -858,14 +864,8 @@ const FinanceTracker = ({ db, userId }) => {
           const docRef = doc(collection(db, `users/${userId}/transactions`));
           batch.set(docRef, transaction);
         });
-
         await batch.commit();
-
-        setParsingMessage({
-          message: `${transactionsToAdd.length} transações novas importadas. ${skippedCount} duplicada(s) foram ignorada(s).`,
-          type: 'success'
-        });
-
+        setParsingMessage({ message: `${transactionsToAdd.length} transações novas importadas. ${skippedCount} duplicada(s) foram ignorada(s).`, type: 'success' });
       } catch (error) {
         console.error("Erro ao processar o arquivo CSV:", error);
         setParsingMessage({ message: `Erro: ${error.message}`, type: 'error' });
@@ -880,40 +880,28 @@ const FinanceTracker = ({ db, userId }) => {
     };
     reader.readAsText(file, 'UTF-8');
   };
-
-  // --- USEEFFECT ATUALIZADO ---
+  
   useEffect(() => {
     if (!db || !userId) return;
-
     const classificationsCollection = collection(db, `users/${userId}/classifications`);
     const unsubscribeClassifications = onSnapshot(classificationsCollection, (snapshot) => {
       const classifications = {};
-      snapshot.forEach(doc => {
-        classifications[doc.id] = doc.data().category;
-      });
+      snapshot.forEach(doc => { classifications[doc.id] = doc.data().category; });
       setKnownClassifications(classifications);
     });
-
     const transactionsCollection = collection(db, `users/${userId}/transactions`);
     const unsubscribeTransactions = onSnapshot(query(transactionsCollection), (snapshot) => {
       const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTransactions(allTransactions);
-
-      const ids = new Set(allTransactions.map(t => createTransactionId({
-        ...t,
-        timestamp: t.timestamp?.toDate()
-      })));
+      const ids = new Set(allTransactions.map(t => createTransactionId({ ...t, timestamp: t.timestamp?.toDate() })));
       setExistingTransactionIds(ids);
-
       setLoading(false);
     });
-
     return () => {
       unsubscribeClassifications();
       unsubscribeTransactions();
     };
   }, [db, userId]);
-
 
   const addTransaction = (e, responsible) => {
     e.preventDefault();
@@ -921,13 +909,7 @@ const FinanceTracker = ({ db, userId }) => {
       alert("Por favor, preencha todos os campos.");
       return;
     }
-    const data = {
-      description,
-      amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
-      type,
-      importer: responsible,
-      timestamp: new Date(manualDate + 'T12:00:00')
-    };
+    const data = { description, amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate + 'T12:00:00') };
     addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
       setParsingMessage({ message: "Transação adicionada com sucesso!", type: 'success' });
       setDescription(''); setAmount(''); setManualDate('');
@@ -1412,3 +1394,4 @@ function App() {
 }
 
 export default App;
+q
