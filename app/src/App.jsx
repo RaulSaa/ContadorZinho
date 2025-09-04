@@ -667,11 +667,11 @@ const CalendarView = ({ db, userId }) => {
             <div key={dayInfo.key}
               onClick={() => !dayInfo.isEmpty && setSelectedDate(dayInfo.date)}
               className={`p-2 h-24 text-center border rounded-lg cursor-pointer transition-colors relative
-                 ${dayInfo.isEmpty ? 'bg-gray-50' : 'hover:bg-gray-100'}
-                 ${dayInfo.isToday ? 'bg-indigo-100 font-bold' : ''}
-                 ${dayInfo.holiday ? 'bg-blue-100' : ''}
-                 ${dayInfo.hasEvents ? 'bg-yellow-100' : ''}
-                 ${selectedDate?.toDateString() === dayInfo.date?.toDateString() ? 'ring-2 ring-indigo-500' : ''}`}>
+                ${dayInfo.isEmpty ? 'bg-gray-50' : 'hover:bg-gray-100'}
+                ${dayInfo.isToday ? 'bg-indigo-100 font-bold' : ''}
+                ${dayInfo.holiday ? 'bg-blue-100' : ''}
+                ${dayInfo.hasEvents ? 'bg-yellow-100' : ''}
+                ${selectedDate?.toDateString() === dayInfo.date?.toDateString() ? 'ring-2 ring-indigo-500' : ''}`}>
               <span className="text-sm">{dayInfo.day}</span>
               {dayInfo.hasEvents && dayInfo.holiday && <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-orange-500"></div>}
             </div>
@@ -736,8 +736,42 @@ const FinanceTracker = ({ db, userId }) => {
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
+  
+  // --- FUNÇÃO CORRIGIDA PARA IMPORTAÇÃO DE CSV ---
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
 
-  // CORRIGIDO: Removida a dependência 'knownClassifications' para evitar o loop infinito.
+    // ALERTA: A lógica para ler e processar o arquivo CSV precisa ser implementada aqui.
+    // Recomendo usar uma biblioteca como PapaParse (npm install papaparse).
+    // O código abaixo é apenas um placeholder para confirmar que o arquivo foi selecionado.
+    console.log("Arquivo selecionado:", file.name);
+    setParsingMessage({ message: `Arquivo "${file.name}" selecionado. Implemente a lógica de parsing.`, type: 'success' });
+
+    // Exemplo com PapaParse (você precisaria importar 'Papa' de 'papaparse'):
+    /*
+    Papa.parse(file, {
+      header: true,
+      complete: (results) => {
+        console.log("Dados do CSV:", results.data);
+        // Aqui você faria um loop nos results.data e adicionaria cada transação ao Firebase.
+        setIsParsing(false);
+      },
+      error: (error) => {
+        console.error("Erro ao parsear CSV:", error);
+        setParsingMessage({ message: `Erro ao ler o arquivo: ${error.message}`, type: 'error' });
+        setIsParsing(false);
+      }
+    });
+    */
+
+    // Limpa o input para permitir selecionar o mesmo arquivo novamente no futuro
+    event.target.value = null;
+  };
+
+
   useEffect(() => {
     if (!db || !userId) return;
 
@@ -765,7 +799,17 @@ const FinanceTracker = ({ db, userId }) => {
 
   const addTransaction = (e, responsible) => {
     e.preventDefault();
-    const data = { description, amount: parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate) };
+    if (!description || !amount || !manualDate) {
+      alert("Por favor, preencha todos os campos.");
+      return;
+    }
+    const data = { 
+        description, 
+        amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), 
+        type, 
+        importer: responsible, 
+        timestamp: new Date(manualDate + 'T12:00:00') // Adiciona hora para evitar problemas de fuso
+    };
     addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
       setParsingMessage({ message: "Transação adicionada com sucesso!", type: 'success' });
       setDescription(''); setAmount(''); setManualDate('');
@@ -785,12 +829,12 @@ const FinanceTracker = ({ db, userId }) => {
   };
 
   const deleteTransaction = async (transactionId) => {
-    await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
-    setParsingMessage({ message: "Transação apagada.", type: 'success' });
+    if (window.confirm("Tem a certeza que quer apagar esta transação?")) {
+        await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
+        setParsingMessage({ message: "Transação apagada.", type: 'success' });
+    }
   };
   
-  // CORRIGIDO: O processamento dos dados agora ocorre fora do useEffect,
-  // reagindo corretamente às atualizações de 'transactions' e 'knownClassifications'.
   const processedTransactions = transactions.map(t => ({
     ...t,
     category: t.category || knownClassifications[t.description] || null
@@ -879,6 +923,47 @@ const FinanceTracker = ({ db, userId }) => {
 
   return (
     <div className="p-4 md:p-8">
+    
+      {/* --- CÓDIGO DO POP-UP DE ADIÇÃO INSERIDO AQUI --- */}
+      {isAddTransactionPopupOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
+            <h2 className="text-2xl font-bold">Nova Transação</h2>
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                setIsResponsiblePopupOpen(true);
+              }}>
+              <div className="space-y-4">
+                <input type="text" placeholder="Descrição" value={description} onChange={e => setDescription(e.target.value)} required className="w-full p-2 border rounded-md" />
+                <input type="number" step="0.01" placeholder="Valor" value={amount} onChange={e => setAmount(e.target.value)} required className="w-full p-2 border rounded-md" />
+                <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} required className="w-full p-2 border rounded-md" />
+                <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 border rounded-md">
+                  <option value="receita">Receita</option>
+                  <option value="despesa">Despesa</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-4 mt-6">
+                <button type="button" onClick={() => setIsAddTransactionPopupOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                <button type="submit" className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Próximo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isResponsiblePopupOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm space-y-4">
+                  <h2 className="text-xl font-bold text-center">Quem é o responsável?</h2>
+                  <div className="flex justify-center gap-4">
+                    <button onClick={(e) => addTransaction(e, 'Karol')} className="py-3 px-6 rounded-md text-white bg-purple-600 hover:bg-purple-700">Karol</button>
+                    <button onClick={(e) => addTransaction(e, 'Raul')} className="py-3 px-6 rounded-md text-white bg-blue-400 hover:bg-blue-500">Raul</button>
+                  </div>
+                  <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full mt-4 py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Voltar</button>
+              </div>
+          </div>
+      )}
+
       {isFixedCostFilterOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
@@ -973,14 +1058,25 @@ const FinanceTracker = ({ db, userId }) => {
                     <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
                   </div>
                 )}
-                <input type="file" ref={csvInputRef} accept=".csv" className="block w-full text-sm" />
-                <button disabled={isParsing} className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50">{isParsing ? 'A importar...' : 'Importar CSV'}</button>
+                <input 
+                  type="file" 
+                  ref={csvInputRef} 
+                  accept=".csv" 
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }} 
+                />
+                <button 
+                  onClick={() => csvInputRef.current.click()}
+                  disabled={isParsing || (!isClassifiedImport && !importer)} 
+                  className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isParsing ? 'A importar...' : 'Importar CSV'}
+                </button>
               </div>
             </section>
             <section className="bg-white p-6 rounded-xl shadow-lg">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">Histórico ({unclassifiedCount} por classificar)</h2>
-                {/* <button onClick={exportClassifiedData} className="py-1 px-3 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700">Exportar</button> */}
               </div>
               <div className="flex flex-wrap gap-2 mb-4">
                 <button onClick={() => setClassificationFilter('Todos')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Todos' ? 'bg-gray-600 text-white' : 'bg-gray-200'}`}>Todas</button>
@@ -998,7 +1094,7 @@ const FinanceTracker = ({ db, userId }) => {
                         <option value="">Classificar</option>
                         {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => (<option key={cat} value={cat}>{cat}</option>))}
                       </select>
-                      <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1">Apagar</button>
+                      <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1"><i className="fas fa-trash"></i></button>
                     </div>
                   </div>
                   <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
