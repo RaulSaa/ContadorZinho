@@ -736,42 +736,119 @@ const FinanceTracker = ({ db, userId }) => {
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
-  
-  // --- FUNÇÃO CORRIGIDA PARA IMPORTAÇÃO DE CSV ---
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (!file) {
-      return;
-    }
 
-    // ALERTA: A lógica para ler e processar o arquivo CSV precisa ser implementada aqui.
-    // Recomendo usar uma biblioteca como PapaParse (npm install papaparse).
-    // O código abaixo é apenas um placeholder para confirmar que o arquivo foi selecionado.
-    console.log("Arquivo selecionado:", file.name);
-    setParsingMessage({ message: `Arquivo "${file.name}" selecionado. Implemente a lógica de parsing.`, type: 'success' });
+  // SUA LÓGICA PARA LER O TEXTO DO CSV
+  const parseCsvText = (text, isClassified = false) => {
+    const transactions = [];
+    const lines = text.split('\n').filter(line => line.trim() !== '');
 
-    // Exemplo com PapaParse (você precisaria importar 'Papa' de 'papaparse'):
-    /*
-    Papa.parse(file, {
-      header: true,
-      complete: (results) => {
-        console.log("Dados do CSV:", results.data);
-        // Aqui você faria um loop nos results.data e adicionaria cada transação ao Firebase.
-        setIsParsing(false);
-      },
-      error: (error) => {
-        console.error("Erro ao parsear CSV:", error);
-        setParsingMessage({ message: `Erro ao ler o arquivo: ${error.message}`, type: 'error' });
-        setIsParsing(false);
+    if (isClassified) {
+      if (lines.length <= 1) return transactions;
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const parts = line.split(';');
+        if (parts.length >= 6) {
+          const dateString = parts[0].trim();
+          const description = parts[1].trim();
+          const type = parts[2].trim();
+          const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
+          const category = parts[4].trim();
+          const importer = parts[5].trim();
+
+          const amount = parseFloat(valueString);
+          if (!isNaN(amount)) {
+            const [day, month, year] = dateString.split('/');
+            const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`); // Adiciona hora para evitar erros de fuso
+            
+            transactions.push({
+              timestamp: transactionDate,
+              description: description,
+              amount: amount,
+              type: type,
+              category: category,
+              importer: importer
+            });
+          }
+        }
       }
-    });
-    */
+    } else {
+        if (lines.length <= 3) return transactions; // Ignora as 3 primeiras linhas de cabeçalho
+        for (let i = 3; i < lines.length; i++) {
+          const line = lines[i];
+          const parts = line.split(';');
+          if (parts.length >= 4) {
+            const dateString = parts[0].trim();
+            const description = parts[1].trim();
+            const valueString = parts[3].replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.').trim();
 
-    // Limpa o input para permitir selecionar o mesmo arquivo novamente no futuro
-    event.target.value = null;
+            const amount = parseFloat(valueString);
+            
+            if (!isNaN(amount)) {
+              const type = amount >= 0 ? 'receita' : 'despesa';
+              const [day, month, year] = dateString.split('-');
+              const transactionDate = new Date(`${year}-${month}-${day}T12:00:00`); // Adiciona hora para evitar erros de fuso
+
+              transactions.push({
+                timestamp: transactionDate,
+                description: description,
+                amount: amount,
+                type: type,
+              });
+            }
+          }
+        }
+    }
+    return transactions;
   };
 
+  // FUNÇÃO ATUALIZADA QUE USA A LÓGICA ACIMA E ENVIA PARA O FIREBASE
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
+    setIsParsing(true);
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        const newTransactions = parseCsvText(text, isClassifiedImport);
+
+        if (newTransactions.length === 0) {
+          throw new Error("Nenhuma transação válida encontrada no arquivo.");
+        }
+
+        // Prepara para enviar em lote para o Firebase
+        const batch = writeBatch(db);
+        newTransactions.forEach(transaction => {
+          const docRef = doc(collection(db, `users/${userId}/transactions`));
+          const dataToSave = {
+              ...transaction,
+              importer: isClassifiedImport ? transaction.importer : importer, // Garante que o importador seja salvo
+          };
+          batch.set(docRef, dataToSave);
+        });
+
+        await batch.commit(); // Envia tudo de uma vez
+
+        setParsingMessage({ message: `${newTransactions.length} transações importadas com sucesso!`, type: 'success' });
+      } catch (error) {
+        console.error("Erro ao processar o arquivo CSV:", error);
+        setParsingMessage({ message: `Erro: ${error.message}`, type: 'error' });
+      } finally {
+        setIsParsing(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setParsingMessage({ message: "Não foi possível ler o arquivo.", type: 'error' });
+      setIsParsing(false);
+    };
+
+    reader.readAsText(file, 'UTF-8'); // Lê o arquivo como texto
+    event.target.value = null; // Limpa o input
+  };
+  
   useEffect(() => {
     if (!db || !userId) return;
 
@@ -796,18 +873,17 @@ const FinanceTracker = ({ db, userId }) => {
     };
   }, [db, userId]);
 
-
   const addTransaction = (e, responsible) => {
     e.preventDefault();
     if (!description || !amount || !manualDate) {
       alert("Por favor, preencha todos os campos.");
       return;
     }
-    const data = { 
-        description, 
-        amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), 
-        type, 
-        importer: responsible, 
+    const data = {
+        description,
+        amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
+        type,
+        importer: responsible,
         timestamp: new Date(manualDate + 'T12:00:00') // Adiciona hora para evitar problemas de fuso
     };
     addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
@@ -834,7 +910,8 @@ const FinanceTracker = ({ db, userId }) => {
         setParsingMessage({ message: "Transação apagada.", type: 'success' });
     }
   };
-  
+
+  // O resto do seu componente continua igual...
   const processedTransactions = transactions.map(t => ({
     ...t,
     category: t.category || knownClassifications[t.description] || null
@@ -923,8 +1000,6 @@ const FinanceTracker = ({ db, userId }) => {
 
   return (
     <div className="p-4 md:p-8">
-    
-      {/* --- CÓDIGO DO POP-UP DE ADIÇÃO INSERIDO AQUI --- */}
       {isAddTransactionPopupOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
@@ -963,7 +1038,7 @@ const FinanceTracker = ({ db, userId }) => {
               </div>
           </div>
       )}
-
+      
       {isFixedCostFilterOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
@@ -1058,16 +1133,16 @@ const FinanceTracker = ({ db, userId }) => {
                     <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
                   </div>
                 )}
-                <input 
-                  type="file" 
-                  ref={csvInputRef} 
-                  accept=".csv" 
+                <input
+                  type="file"
+                  ref={csvInputRef}
+                  accept=".csv"
                   onChange={handleFileSelect}
-                  style={{ display: 'none' }} 
+                  style={{ display: 'none' }}
                 />
-                <button 
+                <button
                   onClick={() => csvInputRef.current.click()}
-                  disabled={isParsing || (!isClassifiedImport && !importer)} 
+                  disabled={isParsing || (!isClassifiedImport && !importer)}
                   className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isParsing ? 'A importar...' : 'Importar CSV'}
