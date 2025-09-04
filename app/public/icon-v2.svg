@@ -1,7 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="22" fill="#4f46e5"/>
-  <!-- Ícone de casa com "KR" -->
-  <path fill="white" d="M50 25 L20 50 H30 V80 H70 V50 H80 Z"/>
-  <text x="50" y="72" font-size="28" fill="#4f46e5" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold">KR</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Fundo arredondado -->
+  <rect x="0" y="0" width="512" height="512" rx="60" fill="#2F2F87"/>
 
+  <!-- Silhueta mãe e bebê (estilo simplificado) -->
+  <path d="M220 140
+           C200 180, 210 230, 250 250
+           C270 260, 300 260, 310 240
+           C320 220, 310 200, 300 190
+           C290 180, 270 170, 250 170
+           C240 170, 230 160, 220 140Z"
+        stroke="white" stroke-width="6" fill="none" />
+
+  <circle cx="310" cy="240" r="40" stroke="white" stroke-width="6" fill="none"/>
+
+  <!-- Texto -->
+  <text x="50%" y="460" text-anchor="middle"
+        font-family="Arial, sans-serif"
+        font-size="48" fill="white"
+        font-weight="bold">
+    Casinha KR
+  </text>
+</svg>
