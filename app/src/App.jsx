@@ -11,6 +11,32 @@ import {
 import { getFirestore, doc, collection, onSnapshot, addDoc, setDoc, deleteDoc, query, serverTimestamp, updateDoc, arrayUnion, arrayRemove, orderBy, writeBatch } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
+// --- FUNÇÕES AUXILIARES DE DATA (MOVIDAS PARA CIMA PARA CORRIGIR O ERRO) ---
+const formatDate = (date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const getPreviousMonthRange = () => {
+  const today = new Date();
+  const endOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+  const startOfPreviousMonth = new Date(endOfPreviousMonth.getFullYear(), endOfPreviousMonth.getMonth(), 1);
+  return {
+    start: formatDate(startOfPreviousMonth),
+    end: formatDate(endOfPreviousMonth),
+  };
+};
+
+const getLastSixMonthsRange = () => {
+  const today = new Date();
+  const endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+  const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
+  return {
+    start: formatDate(startDate),
+    end: formatDate(endDate),
+  };
+};
+
+
 // --- COMPONENTES AUXILIARES ---
 const formatCurrency = (value) => {
   if (typeof value !== 'number') return 'R$ 0,00';
@@ -710,32 +736,7 @@ const CalendarView = ({ db, userId }) => {
   );
 };
 
-// --- FUNÇÕES AUXILIARES DE DATA ---
-const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
-};
-
-const getPreviousMonthRange = () => {
-  const today = new Date();
-  const endOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-  const startOfPreviousMonth = new Date(endOfPreviousMonth.getFullYear(), endOfPreviousMonth.getMonth(), 1);
-  return {
-    start: formatDate(startOfPreviousMonth),
-    end: formatDate(endOfPreviousMonth),
-  };
-};
-
-const getLastSixMonthsRange = () => {
-  const today = new Date();
-  const endDate = new Date(today.getFullYear(), today.getMonth(), 0);
-  const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
-  return {
-    start: formatDate(startDate),
-    end: formatDate(endDate),
-  };
-};
-
-// --- FINANCEIRO (CÓDIGO COMPLETO E CORRIGIDO) ---
+// --- FINANCEIRO ---
 const FinanceTracker = ({ db, userId }) => {
   const [transactions, setTransactions] = useState([]);
   const [description, setDescription] = useState('');
@@ -760,11 +761,9 @@ const FinanceTracker = ({ db, userId }) => {
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
   const [existingTransactionIds, setExistingTransactionIds] = useState(new Set());
 
-  // --- ESTADO INICIAL DAS DATAS (MÊS ANTERIOR POR PADRÃO) ---
   const [startDate, setStartDate] = useState(getPreviousMonthRange().start);
   const [endDate, setEndDate] = useState(getPreviousMonthRange().end);
 
-  // --- ATUALIZA DATAS QUANDO A ABA MUDA ---
   useEffect(() => {
     if (activeTab === 'lancamentos') {
       const { start, end } = getPreviousMonthRange();
@@ -1394,4 +1393,3 @@ function App() {
 }
 
 export default App;
-q
