@@ -537,6 +537,7 @@ const CalendarView = ({ db, userId }) => {
   const holidays = { '01-01': { name: 'Confraternização Universal', type: 'national' },'01-25': { name: 'Aniversário de São Paulo', type: 'local' },'03-04': { name: 'Carnaval', type: 'national' },'04-18': { name: 'Paixão de Cristo', type: 'national' },'04-21': { name: 'Tiradentes', type: 'national' },'05-01': { name: 'Dia do Trabalho', type: 'national' },'06-19': { name: 'Corpus Christi', type: 'national' },'07-09': { name: 'Revolução Constitucionalista', type: 'local' },'09-07': { name: 'Independência do Brasil', type: 'national' },'10-12': { name: 'Nossa Senhora Aparecida', type: 'national' },'11-02': { name: 'Finados', type: 'national' },'11-15': { name: 'Proclamação da República', type: 'national' },'11-20': { name: 'Consciência Negra', type: 'local' },'12-25': { name: 'Natal', type: 'national' }, };
 
   useEffect(() => {
+    // Solicitar permissão de notificação quando o componente é montado
     if ("Notification" in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -579,6 +580,18 @@ const CalendarView = ({ db, userId }) => {
     setReminder(event.reminder || 'none');
     setIsEventModalOpen(true);
   };
+  
+  // Nova função para agendar a notificação
+  const scheduleNotification = (title, reminderTime) => {
+    if ("Notification" in window && Notification.permission === "granted" && reminderTime > Date.now()) {
+      const delay = reminderTime - Date.now();
+      setTimeout(() => {
+        new Notification("Lembrete de Evento", {
+          body: title,
+        });
+      }, delay);
+    }
+  };
 
   const handleSaveEvent = async () => {
     if (!eventTitle || !startDate || !startTime) {
@@ -609,6 +622,26 @@ const CalendarView = ({ db, userId }) => {
           createdAt: serverTimestamp(),
         });
       }
+      
+      // Chamar a nova função para agendar a notificação
+      if (reminder !== 'none') {
+        let reminderTime = startDateTime.getTime();
+        switch (reminder) {
+          case '15m':
+            reminderTime -= 15 * 60 * 1000;
+            break;
+          case '1h':
+            reminderTime -= 60 * 60 * 1000;
+            break;
+          case '1d':
+            reminderTime -= 24 * 60 * 60 * 1000;
+            break;
+          default:
+            break;
+        }
+        scheduleNotification(eventTitle, reminderTime);
+      }
+
       setIsEventModalOpen(false);
     } catch (error) {
       console.error("Erro ao salvar o evento:", error);
