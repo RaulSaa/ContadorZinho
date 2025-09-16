@@ -562,41 +562,58 @@ const CalendarView = ({ db, userId }) => {
   const openEditModal = (event) => {
     setEditingEvent(event);
     setEventTitle(event.title);
-    const start = new Date(event.start.seconds * 1000);
+    const start = event.start.toDate();
     setStartDate(start.toISOString().split('T')[0]);
     setStartTime(start.toTimeString().substring(0, 5));
+
     if (event.end) {
-      const end = new Date(event.end.seconds * 1000);
+      const end = event.end.toDate();
       setEndDate(end.toISOString().split('T')[0]);
       setEndTime(end.toTimeString().substring(0, 5));
-    } else { setEndDate(''); setEndTime(''); }
+    } else {
+      setEndDate('');
+      setEndTime('');
+    }
+
     setFrequency(event.frequency || 'none');
     setReminder(event.reminder || 'none');
     setIsEventModalOpen(true);
   };
 
   const handleSaveEvent = async () => {
-    if (!eventTitle || !startDate || !startTime) return;
+    if (!eventTitle || !startDate || !startTime) {
+      alert("Por favor, preencha o título, a data e a hora de início.");
+      return;
+    }
 
-    // Criar um novo objeto Date para a data e hora de início
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-    const [startHour, startMinute] = startTime.split(':').map(Number);
-    const startDateTime = new Date(startYear, startMonth - 1, startDay, startHour, startMinute);
-
+    const startDateTime = new Date(`${startDate}T${startTime}`);
     let endDateTime = null;
     if (endDate && endTime) {
-      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      endDateTime = new Date(endYear, endMonth - 1, endDay, endHour, endMinute);
+      endDateTime = new Date(`${endDate}T${endTime}`);
     }
-    
-    const eventData = { title: eventTitle, start: startDateTime, end: endDateTime, frequency, reminder };
-    if (editingEvent) {
-      await setDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id), eventData, { merge: true });
-    } else {
-      await addDoc(collection(db, `users/${userId}/calendarEvents`), { ...eventData, createdAt: serverTimestamp() });
+
+    const eventData = {
+      title: eventTitle,
+      start: startDateTime,
+      end: endDateTime,
+      frequency,
+      reminder,
+    };
+
+    try {
+      if (editingEvent) {
+        await setDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id), eventData, { merge: true });
+      } else {
+        await addDoc(collection(db, `users/${userId}/calendarEvents`), {
+          ...eventData,
+          createdAt: serverTimestamp(),
+        });
+      }
+      setIsEventModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao salvar o evento:", error);
+      alert("Houve um erro ao salvar o evento. Por favor, tente novamente.");
     }
-    setIsEventModalOpen(false);
   };
 
   const handleDeleteEvent = async () => {
@@ -633,7 +650,7 @@ const CalendarView = ({ db, userId }) => {
 
   const getSelectedDayEvents = () => {
     if (!selectedDate) return [];
-    const userEvents = events.filter(e => new Date(e.start.seconds * 1000).toDateString() === selectedDate.toDateString()).map(e => ({ ...e, type: 'event' }));
+    const userEvents = events.filter(e => e.start.toDate().toDateString() === selectedDate.toDateString()).map(e => ({ ...e, type: 'event' }));
     const dateString = `${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const holiday = holidays[dateString];
     return holiday ? [{ ...holiday, type: 'holiday' }, ...userEvents] : userEvents;
