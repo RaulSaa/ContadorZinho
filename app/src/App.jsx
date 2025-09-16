@@ -577,8 +577,19 @@ const CalendarView = ({ db, userId }) => {
 
   const handleSaveEvent = async () => {
     if (!eventTitle || !startDate || !startTime) return;
-    const startDateTime = new Date(`${startDate}T${startTime}`);
-    const endDateTime = endDate && endTime ? new Date(`${endDate}T${endTime}`) : null;
+
+    // Criar um novo objeto Date para a data e hora de início
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const startDateTime = new Date(startYear, startMonth - 1, startDay, startHour, startMinute);
+
+    let endDateTime = null;
+    if (endDate && endTime) {
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      endDateTime = new Date(endYear, endMonth - 1, endDay, endHour, endMinute);
+    }
+    
     const eventData = { title: eventTitle, start: startDateTime, end: endDateTime, frequency, reminder };
     if (editingEvent) {
       await setDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id), eventData, { merge: true });
@@ -637,17 +648,18 @@ const CalendarView = ({ db, userId }) => {
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg space-y-4">
             <h2 className="text-2xl font-bold">{editingEvent ? 'Editar Evento' : 'Novo Evento'}</h2>
             <input type="text" placeholder="Título do evento" value={eventTitle} onChange={e => setEventTitle(e.target.value)} className="w-full p-2 border rounded-md" />
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
                 <label className="text-sm">Início</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-1">
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-md" />
                   <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-2 border rounded-md" />
                 </div>
               </div>
-              <div>
+              <div className="flex-1">
                 <label className="text-sm">Fim (opcional)</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-1">
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" />
                   <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-2 border rounded-md" />
                 </div>
