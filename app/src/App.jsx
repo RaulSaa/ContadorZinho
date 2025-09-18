@@ -800,7 +800,7 @@ const CalendarView = ({ db, userId }) => {
 };
 
 // --- FINANCEIRO ---
-const FinanceTracker = ({ db, userId, expenseCategories, revenueCategories }) => {
+const FinanceTracker = ({ db, userId }) => {
   const [transactions, setTransactions] = useState([]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -821,6 +821,8 @@ const FinanceTracker = ({ db, userId, expenseCategories, revenueCategories }) =>
   const [activeTab, setActiveTab] = useState('lancamentos');
   const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
+  const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
+  const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
   const [existingTransactionIds, setExistingTransactionIds] = useState(new Set());
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false); // Novo estado para o modal de filtro
 
@@ -1334,298 +1336,6 @@ const FinanceTracker = ({ db, userId, expenseCategories, revenueCategories }) =>
   );
 };
 
-// --- NOVO COMPONENTE DE CONFIGURAÇÕES ---
-
-// Sub-componente para a tela de edição de usuários
-const UserConfig = ({ db, userId, onBack }) => {
-  const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState([
-    { name: 'Karol', color: '#8b5cf6' },
-    { name: 'Raul', color: '#60a5fa' },
-  ]);
-
-  useEffect(() => {
-    if (!db || !userId) return;
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setUsers(data.users || []);
-      }
-    });
-    return () => unsubscribe();
-  }, [db, userId]);
-
-  const handleEditUser = (index, field, value) => {
-    const updatedUsers = [...users];
-    updatedUsers[index][field] = value;
-    setUsers(updatedUsers);
-  };
-
-  const handleSaveUsers = async () => {
-    try {
-      setLoading(true);
-      await setDoc(doc(db, `users/${userId}/config/users`), { users }, { merge: true });
-      alert('Usuários salvos com sucesso!');
-    } catch (e) {
-      alert('Erro ao salvar usuários.');
-      console.error("Erro ao salvar usuários:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-      <div className="flex items-center gap-4 border-b pb-4 mb-4">
-        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-          <i className="fas fa-chevron-left"></i>
-        </button>
-        <h2 className="text-2xl font-bold">Personalizar Usuários</h2>
-      </div>
-      <div className="space-y-4">
-        {users.map((user, index) => (
-          <div key={index} className="flex flex-col sm:flex-row items-center gap-4">
-            <input
-              type="text"
-              value={user.name}
-              onChange={(e) => handleEditUser(index, 'name', e.target.value)}
-              placeholder="Nome do usuário"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <input
-              type="color"
-              value={user.color}
-              onChange={(e) => handleEditUser(index, 'color', e.target.value)}
-              className="w-12 h-12 rounded-full cursor-pointer"
-              title="Escolha a cor"
-            />
-          </div>
-        ))}
-      </div>
-      <button onClick={handleSaveUsers} disabled={loading} className="w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-        {loading ? 'Salvando...' : 'Salvar Usuários'}
-      </button>
-    </div>
-  );
-};
-
-// Sub-componente para a tela de edição de categorias
-const CategoryConfig = ({ db, userId, onBack, expenseCategories, revenueCategories }) => {
-  const [loading, setLoading] = useState(false);
-  const [newExpenseCategory, setNewExpenseCategory] = useState('');
-  const [newRevenueCategory, setNewRevenueCategory] = useState('');
-  const [editingIndex, setEditingIndex] = useState({ type: null, index: null });
-  const [localExpenseCategories, setLocalExpenseCategories] = useState(expenseCategories);
-  const [localRevenueCategories, setLocalRevenueCategories] = useState(revenueCategories);
-
-
-  const handleSaveCategories = async () => {
-    try {
-      setLoading(true);
-      await setDoc(doc(db, `users/${userId}/config/categories`), {
-        expenseCategories: localExpenseCategories,
-        revenueCategories: localRevenueCategories,
-      }, { merge: true });
-      alert('Categorias salvas com sucesso!');
-    } catch (e) {
-      alert('Erro ao salvar categorias.');
-      console.error("Erro ao salvar categorias:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddCategory = (category, type) => {
-    if (type === 'expense' && category) {
-      setLocalExpenseCategories([...localExpenseCategories, category]);
-      setNewExpenseCategory('');
-    }
-    if (type === 'revenue' && category) {
-      setLocalRevenueCategories([...localRevenueCategories, category]);
-      setNewRevenueCategory('');
-    }
-  };
-
-  const handleRemoveCategory = (categoryToRemove, type) => {
-    if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
-      if (type === 'expense') {
-        setLocalExpenseCategories(localExpenseCategories.filter(cat => cat !== categoryToRemove));
-      }
-      if (type === 'revenue') {
-        setLocalRevenueCategories(localRevenueCategories.filter(cat => cat !== categoryToRemove));
-      }
-    }
-  };
-
-  const handleEditChange = (e, type, index) => {
-    const updatedList = (type === 'expense' ? [...localExpenseCategories] : [...localRevenueCategories]);
-    updatedList[index] = e.target.value;
-    if (type === 'expense') {
-      setLocalExpenseCategories(updatedList);
-    } else {
-      setLocalRevenueCategories(updatedList);
-    }
-  };
-
-  const startEditing = (type, index) => {
-    setEditingIndex({ type, index });
-  };
-
-  const stopEditing = () => {
-    setEditingIndex({ type: null, index: null });
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      stopEditing();
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-      <div className="flex items-center gap-4 border-b pb-4 mb-4">
-        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-          <i className="fas fa-chevron-left"></i>
-        </button>
-        <h2 className="text-2xl font-bold">Gerenciar Listas de Gastos</h2>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h3 className="text-xl font-semibold mb-2">Despesas</h3>
-          <ul className="space-y-2">
-            {localExpenseCategories.map((cat, index) => (
-              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
-                {editingIndex.type === 'expense' && editingIndex.index === index ? (
-                  <input
-                    type="text"
-                    value={cat}
-                    onChange={(e) => handleEditChange(e, 'expense', index)}
-                    onBlur={stopEditing}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
-                  />
-                ) : (
-                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('expense', index)}>{cat}</span>
-                )}
-                <button onClick={() => handleRemoveCategory(cat, 'expense')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i className="fas fa-trash-alt"></i>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2 mt-4">
-            <input
-              type="text"
-              value={newExpenseCategory}
-              onChange={(e) => setNewExpenseCategory(e.target.value)}
-              placeholder="Nova categoria de despesa"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <button onClick={() => handleAddCategory(newExpenseCategory, 'expense')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-          </div>
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold mb-2">Receitas</h3>
-          <ul className="space-y-2">
-            {localRevenueCategories.map((cat, index) => (
-              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
-                {editingIndex.type === 'revenue' && editingIndex.index === index ? (
-                  <input
-                    type="text"
-                    value={cat}
-                    onChange={(e) => handleEditChange(e, 'revenue', index)}
-                    onBlur={stopEditing}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
-                  />
-                ) : (
-                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('revenue', index)}>{cat}</span>
-                )}
-                <button onClick={() => handleRemoveCategory(cat, 'revenue')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i className="fas fa-trash-alt"></i>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2 mt-4">
-            <input
-              type="text"
-              value={newRevenueCategory}
-              onChange={(e) => setNewRevenueCategory(e.target.value)}
-              placeholder="Nova categoria de receita"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <button onClick={() => handleAddCategory(newRevenueCategory, 'revenue')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-          </div>
-        </div>
-      </div>
-      <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-        {loading ? 'Salvando...' : 'Salvar Categorias'}
-      </button>
-    </div>
-  );
-};
-
-// Sub-componente para a tela de configurações da conta
-const AccountConfig = ({ onBack }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-    <div className="flex items-center gap-4 border-b pb-4 mb-4">
-      <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-        <i className="fas fa-chevron-left"></i>
-      </button>
-      <h2 className="text-2xl font-bold">Minha Conta</h2>
-    </div>
-    <div className="space-y-4">
-      <p className="text-gray-600">Funcionalidade de edição de e-mail e senha em breve...</p>
-    </div>
-  </div>
-);
-
-// Componente principal de Configurações
-const SettingsView = ({ db, userId, expenseCategories, revenueCategories }) => {
-  const [subView, setSubView] = useState(null);
-
-  const renderSubView = () => {
-    switch (subView) {
-      case 'users':
-        return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
-      case 'categories':
-        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} expenseCategories={expenseCategories} revenueCategories={revenueCategories} />;
-      case 'account':
-        return <AccountConfig onBack={() => setSubView(null)} />;
-      default:
-        return (
-          <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
-            <header className="border-b pb-4 mb-4">
-              <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
-            </header>
-            <button onClick={() => setSubView('users')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Usuários</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-            <button onClick={() => setSubView('categories')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Listas de gastos</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-            <button onClick={() => setSubView('account')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Minha Conta</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-          </div>
-        );
-    }
-  };
-
-  return (
-    <div className="p-4 md:p-8">
-      {renderSubView()}
-    </div>
-  );
-};
-
 // --- TELA DE LOGIN E REGISTO ---
 const AuthScreen = ({ auth }) => {
   const [email, setEmail] = useState('');
@@ -1978,7 +1688,6 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [view, setView] = useState('finance');
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [appCategories, setAppCategories] = useState({ expense: [], revenue: [] });
 
   useEffect(() => {
     try {
@@ -2050,24 +1759,6 @@ function App() {
           }
           // --- FIM DO CÓDIGO PARA NOTIFICAÇÕES PUSH ---
 
-          // --- NOVO: Carregar categorias do Firestore
-          const defaultExpenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
-          const defaultRevenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
-          onSnapshot(doc(firestoreDb, `users/${user.uid}/config/categories`), (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              setAppCategories({
-                expense: data.expenseCategories || defaultExpenseCategories,
-                revenue: data.revenueCategories || defaultRevenueCategories,
-              });
-            } else {
-              setAppCategories({
-                expense: defaultExpenseCategories,
-                revenue: defaultRevenueCategories,
-              });
-            }
-          });
-
         } else {
           setUserId(null);
         }
@@ -2086,11 +1777,11 @@ function App() {
     <div className="relative min-h-screen md:flex">
       <Sidebar view={view} setView={setView} auth={auth} />
       <main className="flex-1 md:ml-64 bg-gray-100">
-        {view === 'finance' && <FinanceTracker db={db} userId={userId} expenseCategories={appCategories.expense} revenueCategories={appCategories.revenue} />}
+        {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
         {view === 'shopping' && <ShoppingList db={db} userId={userId} />}
         {view === 'todo' && <TodoList db={db} userId={userId} />}
         {view === 'calendar' && <CalendarView db={db} userId={userId} />}
-        {view === 'settings' && <SettingsView db={db} userId={userId} expenseCategories={appCategories.expense} revenueCategories={appCategories.revenue} />}
+        {view === 'settings' && <SettingsView db={db} userId={userId} />}
       </main>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
     </div>
