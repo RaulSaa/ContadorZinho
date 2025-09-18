@@ -795,8 +795,8 @@ const CalendarView = ({ db, userId }) => {
       <button onClick={openCreateModal} className="fixed bottom-6 right-6 h-16 w-16 flex items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700">
         <i className="fas fa-plus text-2xl"></i>
       </button>
-      </div>
-  );
+    </div>
+  );
 };
 
 // --- FINANCEIRO ---
