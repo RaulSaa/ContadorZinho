@@ -1386,16 +1386,88 @@ const AuthScreen = ({ auth }) => {
 };
 
 // --- NOVO COMPONENTE DE CONFIGURAÇÕES ---
-const SettingsView = ({ db, userId }) => {
+
+// Sub-componente para a tela de edição de usuários
+const UserConfig = ({ db, userId, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([
     { name: 'Karol', color: '#8b5cf6' },
     { name: 'Raul', color: '#60a5fa' },
   ]);
+
+  useEffect(() => {
+    if (!db || !userId) return;
+    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setUsers(data.users || []);
+      }
+    });
+    return () => unsubscribe();
+  }, [db, userId]);
+
+  const handleEditUser = (index, field, value) => {
+    const updatedUsers = [...users];
+    updatedUsers[index][field] = value;
+    setUsers(updatedUsers);
+  };
+
+  const handleSaveUsers = async () => {
+    try {
+      setLoading(true);
+      await setDoc(doc(db, `users/${userId}/config/users`), { users }, { merge: true });
+      alert('Usuários salvos com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar usuários.');
+      console.error("Erro ao salvar usuários:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+      <div className="flex items-center gap-4 border-b pb-4 mb-4">
+        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
+          <i className="fas fa-chevron-left"></i>
+        </button>
+        <h2 className="text-2xl font-bold">Personalizar Usuários</h2>
+      </div>
+      <div className="space-y-4">
+        {users.map((user, index) => (
+          <div key={index} className="flex flex-col sm:flex-row items-center gap-4">
+            <input
+              type="text"
+              value={user.name}
+              onChange={(e) => handleEditUser(index, 'name', e.target.value)}
+              placeholder="Nome do usuário"
+              className="flex-grow p-2 border rounded-md"
+            />
+            <input
+              type="color"
+              value={user.color}
+              onChange={(e) => handleEditUser(index, 'color', e.target.value)}
+              className="w-12 h-12 rounded-full cursor-pointer"
+              title="Escolha a cor"
+            />
+          </div>
+        ))}
+      </div>
+      <button onClick={handleSaveUsers} disabled={loading} className="w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+        {loading ? 'Salvando...' : 'Salvar Usuários'}
+      </button>
+    </div>
+  );
+};
+
+// Sub-componente para a tela de edição de categorias
+const CategoryConfig = ({ db, userId, onBack }) => {
+  const [loading, setLoading] = useState(false);
   const [expenseCategories, setExpenseCategories] = useState([]);
   const [revenueCategories, setRevenueCategories] = useState([]);
   const [newExpenseCategory, setNewExpenseCategory] = useState('');
   const [newRevenueCategory, setNewRevenueCategory] = useState('');
+  const [editingIndex, setEditingIndex] = useState({ type: null, index: null });
 
   useEffect(() => {
     if (!db || !userId) return;
@@ -1408,12 +1480,6 @@ const SettingsView = ({ db, userId }) => {
     });
     return () => unsubscribe();
   }, [db, userId]);
-
-  const handleEditUser = (index, field, value) => {
-    const updatedUsers = [...users];
-    updatedUsers[index][field] = value;
-    setUsers(updatedUsers);
-  };
   
   const handleSaveCategories = async () => {
     try {
@@ -1426,21 +1492,6 @@ const SettingsView = ({ db, userId }) => {
     } catch (e) {
       alert('Erro ao salvar categorias.');
       console.error("Erro ao salvar categorias:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveUsers = async () => {
-    try {
-      setLoading(true);
-      await setDoc(doc(db, `users/${userId}/config/users`), {
-        users
-      }, { merge: true });
-      alert('Usuários salvos com sucesso!');
-    } catch (e) {
-      alert('Erro ao salvar usuários.');
-      console.error("Erro ao salvar usuários:", e);
     } finally {
       setLoading(false);
     }
@@ -1468,97 +1519,171 @@ const SettingsView = ({ db, userId }) => {
     }
   };
 
+  const handleEditChange = (e, type, index) => {
+    const updatedList = (type === 'expense' ? [...expenseCategories] : [...revenueCategories]);
+    updatedList[index] = e.target.value;
+    if (type === 'expense') {
+      setExpenseCategories(updatedList);
+    } else {
+      setRevenueCategories(updatedList);
+    }
+  };
+
+  const startEditing = (type, index) => {
+    setEditingIndex({ type, index });
+  };
+
+  const stopEditing = () => {
+    setEditingIndex({ type: null, index: null });
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      stopEditing();
+    }
+  };
+
   return (
-    <div className="p-4 md:p-8">
-      <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
-      </header>
-
-      <div className="bg-white p-6 rounded-xl shadow-lg space-y-8">
-        {/* Seção 1: Personalizar Usuários */}
-        <div className="border-b pb-6">
-          <h2 className="text-2xl font-bold mb-4">Personalizar Usuários</h2>
-          <div className="space-y-4">
-            {users.map((user, index) => (
-              <div key={index} className="flex flex-col sm:flex-row items-center gap-4">
-                <input
-                  type="text"
-                  value={user.name}
-                  onChange={(e) => handleEditUser(index, 'name', e.target.value)}
-                  placeholder="Nome do usuário"
-                  className="flex-grow p-2 border rounded-md"
-                />
-                <input
-                  type="color"
-                  value={user.color}
-                  onChange={(e) => handleEditUser(index, 'color', e.target.value)}
-                  className="w-12 h-12 rounded-full cursor-pointer"
-                  title="Escolha a cor"
-                />
-              </div>
+    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+      <div className="flex items-center gap-4 border-b pb-4 mb-4">
+        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
+          <i className="fas fa-chevron-left"></i>
+        </button>
+        <h2 className="text-2xl font-bold">Gerenciar Listas de Gastos</h2>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <h3 className="text-xl font-semibold mb-2">Despesas</h3>
+          <ul className="space-y-2">
+            {expenseCategories.map((cat, index) => (
+              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
+                {editingIndex.type === 'expense' && editingIndex.index === index ? (
+                  <input
+                    type="text"
+                    value={cat}
+                    onChange={(e) => handleEditChange(e, 'expense', index)}
+                    onBlur={stopEditing}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
+                  />
+                ) : (
+                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('expense', index)}>{cat}</span>
+                )}
+                <button onClick={() => handleRemoveCategory(cat, 'expense')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              </li>
             ))}
+          </ul>
+          <div className="flex gap-2 mt-4">
+            <input
+              type="text"
+              value={newExpenseCategory}
+              onChange={(e) => setNewExpenseCategory(e.target.value)}
+              placeholder="Nova categoria de despesa"
+              className="flex-grow p-2 border rounded-md"
+            />
+            <button onClick={() => handleAddCategory(newExpenseCategory, 'expense')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
           </div>
-          <button onClick={handleSaveUsers} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-            {loading ? 'Salvando...' : 'Salvar Usuários'}
-          </button>
         </div>
-
-        {/* Seção 2: Gerenciar Categorias */}
-        <div className="border-b pb-6">
-          <h2 className="text-2xl font-bold mb-4">Gerenciar Categorias</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-xl font-semibold mb-2">Despesas</h3>
-              <ul className="space-y-2">
-                {expenseCategories.map((cat, index) => (
-                  <li key={index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md">
-                    <span className="flex-grow">{cat}</span>
-                    <button onClick={() => handleRemoveCategory(cat, 'expense')} className="text-red-500 hover:text-red-700">
-                      <i className="fas fa-trash-alt"></i>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex gap-2 mt-4">
-                <input
-                  type="text"
-                  value={newExpenseCategory}
-                  onChange={(e) => setNewExpenseCategory(e.target.value)}
-                  placeholder="Nova categoria de despesa"
-                  className="flex-grow p-2 border rounded-md"
-                />
-                <button onClick={() => handleAddCategory(newExpenseCategory, 'expense')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold mb-2">Receitas</h3>
-              <ul className="space-y-2">
-                {revenueCategories.map((cat, index) => (
-                  <li key={index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md">
-                    <span className="flex-grow">{cat}</span>
-                    <button onClick={() => handleRemoveCategory(cat, 'revenue')} className="text-red-500 hover:text-red-700">
-                      <i className="fas fa-trash-alt"></i>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex gap-2 mt-4">
-                <input
-                  type="text"
-                  value={newRevenueCategory}
-                  onChange={(e) => setNewRevenueCategory(e.target.value)}
-                  placeholder="Nova categoria de receita"
-                  className="flex-grow p-2 border rounded-md"
-                />
-                <button onClick={() => handleAddCategory(newRevenueCategory, 'revenue')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-              </div>
-            </div>
+        <div>
+          <h3 className="text-xl font-semibold mb-2">Receitas</h3>
+          <ul className="space-y-2">
+            {revenueCategories.map((cat, index) => (
+              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
+                {editingIndex.type === 'revenue' && editingIndex.index === index ? (
+                  <input
+                    type="text"
+                    value={cat}
+                    onChange={(e) => handleEditChange(e, 'revenue', index)}
+                    onBlur={stopEditing}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
+                  />
+                ) : (
+                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('revenue', index)}>{cat}</span>
+                )}
+                <button onClick={() => handleRemoveCategory(cat, 'revenue')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 mt-4">
+            <input
+              type="text"
+              value={newRevenueCategory}
+              onChange={(e) => setNewRevenueCategory(e.target.value)}
+              placeholder="Nova categoria de receita"
+              className="flex-grow p-2 border rounded-md"
+            />
+            <button onClick={() => handleAddCategory(newRevenueCategory, 'revenue')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
           </div>
-          <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-            {loading ? 'Salvando...' : 'Salvar Categorias'}
-          </button>
         </div>
       </div>
+      <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+        {loading ? 'Salvando...' : 'Salvar Categorias'}
+      </button>
+    </div>
+  );
+};
+
+// Sub-componente para a tela de configurações da conta
+const AccountConfig = ({ onBack }) => (
+  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+    <div className="flex items-center gap-4 border-b pb-4 mb-4">
+      <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
+        <i className="fas fa-chevron-left"></i>
+      </button>
+      <h2 className="text-2xl font-bold">Minha Conta</h2>
+    </div>
+    <div className="space-y-4">
+      <p className="text-gray-600">Funcionalidade de edição de e-mail e senha em breve...</p>
+    </div>
+  </div>
+);
+
+// Componente principal de Configurações
+const SettingsView = ({ db, userId }) => {
+  const [subView, setSubView] = useState(null);
+
+  const renderSubView = () => {
+    switch (subView) {
+      case 'users':
+        return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
+      case 'categories':
+        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
+      case 'account':
+        return <AccountConfig onBack={() => setSubView(null)} />;
+      default:
+        return (
+          <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
+            <header className="border-b pb-4 mb-4">
+              <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
+            </header>
+            <button onClick={() => setSubView('users')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
+              <span className="font-semibold text-lg">Usuários</span>
+              <i className="fas fa-chevron-right text-gray-400"></i>
+            </button>
+            <button onClick={() => setSubView('categories')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
+              <span className="font-semibold text-lg">Listas de gastos</span>
+              <i className="fas fa-chevron-right text-gray-400"></i>
+            </button>
+            <button onClick={() => setSubView('account')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
+              <span className="font-semibold text-lg">Minha Conta</span>
+              <i className="fas fa-chevron-right text-gray-400"></i>
+            </button>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-8">
+      {renderSubView()}
     </div>
   );
 };
