@@ -71,7 +71,6 @@ const Sidebar = ({ view, setView, auth }) => {
     { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart" },
     { name: "Missões", view: "todo", icon: "fas fa-check-square" },
     { name: "Calendário", view: "calendar", icon: "fas fa-calendar-alt" },
-    { name: "Configurações", view: "settings", icon: "fas fa-cog" }, // Novo item de menu
   ];
 
   const NavLink = ({ item }) => (
@@ -94,7 +93,8 @@ const Sidebar = ({ view, setView, auth }) => {
         <nav className="flex-grow space-y-2">
           {menuItems.map(item => <NavLink key={item.view} item={item} />)}
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto space-y-2">
+          <NavLink item={{ name: "Configurações", view: "settings", icon: "fas fa-cog" }} />
           <button onClick={() => signOut(auth)} className="flex items-center w-full px-4 py-3 text-left rounded-lg transition-colors duration-200 text-gray-300 hover:bg-indigo-700 hover:text-white">
             <i className="fas fa-sign-out-alt w-6 text-center"></i>
             <span className="ml-4">Sair</span>
@@ -1394,6 +1394,8 @@ const SettingsView = ({ db, userId }) => {
   ]);
   const [expenseCategories, setExpenseCategories] = useState([]);
   const [revenueCategories, setRevenueCategories] = useState([]);
+  const [newExpenseCategory, setNewExpenseCategory] = useState('');
+  const [newRevenueCategory, setNewRevenueCategory] = useState('');
 
   useEffect(() => {
     if (!db || !userId) return;
@@ -1444,6 +1446,28 @@ const SettingsView = ({ db, userId }) => {
     }
   };
 
+  const handleAddCategory = (category, type) => {
+    if (type === 'expense' && category) {
+      setExpenseCategories([...expenseCategories, category]);
+      setNewExpenseCategory('');
+    }
+    if (type === 'revenue' && category) {
+      setRevenueCategories([...revenueCategories, category]);
+      setNewRevenueCategory('');
+    }
+  };
+
+  const handleRemoveCategory = (categoryToRemove, type) => {
+    if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
+      if (type === 'expense') {
+        setExpenseCategories(expenseCategories.filter(cat => cat !== categoryToRemove));
+      }
+      if (type === 'revenue') {
+        setRevenueCategories(revenueCategories.filter(cat => cat !== categoryToRemove));
+      }
+    }
+  };
+
   return (
     <div className="p-4 md:p-8">
       <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
@@ -1487,24 +1511,52 @@ const SettingsView = ({ db, userId }) => {
               <h3 className="text-xl font-semibold mb-2">Despesas</h3>
               <ul className="space-y-2">
                 {expenseCategories.map((cat, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <span className="flex-grow p-2 bg-gray-100 rounded-md">{cat}</span>
+                  <li key={index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md">
+                    <span className="flex-grow">{cat}</span>
+                    <button onClick={() => handleRemoveCategory(cat, 'expense')} className="text-red-500 hover:text-red-700">
+                      <i className="fas fa-trash-alt"></i>
+                    </button>
                   </li>
                 ))}
               </ul>
+              <div className="flex gap-2 mt-4">
+                <input
+                  type="text"
+                  value={newExpenseCategory}
+                  onChange={(e) => setNewExpenseCategory(e.target.value)}
+                  placeholder="Nova categoria de despesa"
+                  className="flex-grow p-2 border rounded-md"
+                />
+                <button onClick={() => handleAddCategory(newExpenseCategory, 'expense')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
+              </div>
             </div>
             <div>
               <h3 className="text-xl font-semibold mb-2">Receitas</h3>
               <ul className="space-y-2">
                 {revenueCategories.map((cat, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <span className="flex-grow p-2 bg-gray-100 rounded-md">{cat}</span>
+                  <li key={index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md">
+                    <span className="flex-grow">{cat}</span>
+                    <button onClick={() => handleRemoveCategory(cat, 'revenue')} className="text-red-500 hover:text-red-700">
+                      <i className="fas fa-trash-alt"></i>
+                    </button>
                   </li>
                 ))}
               </ul>
+              <div className="flex gap-2 mt-4">
+                <input
+                  type="text"
+                  value={newRevenueCategory}
+                  onChange={(e) => setNewRevenueCategory(e.target.value)}
+                  placeholder="Nova categoria de receita"
+                  className="flex-grow p-2 border rounded-md"
+                />
+                <button onClick={() => handleAddCategory(newRevenueCategory, 'revenue')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
+              </div>
             </div>
           </div>
-          <p className="text-sm text-gray-500 mt-4">Funcionalidade de edição em breve...</p>
+          <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+            {loading ? 'Salvando...' : 'Salvar Categorias'}
+          </button>
         </div>
       </div>
     </div>
