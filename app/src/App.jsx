@@ -71,6 +71,7 @@ const Sidebar = ({ view, setView, auth }) => {
     { name: "Lista de Compras", view: "shopping", icon: "fas fa-shopping-cart" },
     { name: "Missões", view: "todo", icon: "fas fa-check-square" },
     { name: "Calendário", view: "calendar", icon: "fas fa-calendar-alt" },
+    { name: "Configurações", view: "settings", icon: "fas fa-cog" }, // Novo item de menu
   ];
 
   const NavLink = ({ item }) => (
@@ -1384,6 +1385,132 @@ const AuthScreen = ({ auth }) => {
   );
 };
 
+// --- NOVO COMPONENTE DE CONFIGURAÇÕES ---
+const SettingsView = ({ db, userId }) => {
+  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([
+    { name: 'Karol', color: '#8b5cf6' },
+    { name: 'Raul', color: '#60a5fa' },
+  ]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
+  const [revenueCategories, setRevenueCategories] = useState([]);
+
+  useEffect(() => {
+    if (!db || !userId) return;
+    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setExpenseCategories(data.expenseCategories || []);
+        setRevenueCategories(data.revenueCategories || []);
+      }
+    });
+    return () => unsubscribe();
+  }, [db, userId]);
+
+  const handleEditUser = (index, field, value) => {
+    const updatedUsers = [...users];
+    updatedUsers[index][field] = value;
+    setUsers(updatedUsers);
+  };
+  
+  const handleSaveCategories = async () => {
+    try {
+      setLoading(true);
+      await setDoc(doc(db, `users/${userId}/config/categories`), {
+        expenseCategories,
+        revenueCategories
+      }, { merge: true });
+      alert('Categorias salvas com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar categorias.');
+      console.error("Erro ao salvar categorias:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveUsers = async () => {
+    try {
+      setLoading(true);
+      await setDoc(doc(db, `users/${userId}/config/users`), {
+        users
+      }, { merge: true });
+      alert('Usuários salvos com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar usuários.');
+      console.error("Erro ao salvar usuários:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-8">
+      <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
+      </header>
+
+      <div className="bg-white p-6 rounded-xl shadow-lg space-y-8">
+        {/* Seção 1: Personalizar Usuários */}
+        <div className="border-b pb-6">
+          <h2 className="text-2xl font-bold mb-4">Personalizar Usuários</h2>
+          <div className="space-y-4">
+            {users.map((user, index) => (
+              <div key={index} className="flex flex-col sm:flex-row items-center gap-4">
+                <input
+                  type="text"
+                  value={user.name}
+                  onChange={(e) => handleEditUser(index, 'name', e.target.value)}
+                  placeholder="Nome do usuário"
+                  className="flex-grow p-2 border rounded-md"
+                />
+                <input
+                  type="color"
+                  value={user.color}
+                  onChange={(e) => handleEditUser(index, 'color', e.target.value)}
+                  className="w-12 h-12 rounded-full cursor-pointer"
+                  title="Escolha a cor"
+                />
+              </div>
+            ))}
+          </div>
+          <button onClick={handleSaveUsers} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+            {loading ? 'Salvando...' : 'Salvar Usuários'}
+          </button>
+        </div>
+
+        {/* Seção 2: Gerenciar Categorias */}
+        <div className="border-b pb-6">
+          <h2 className="text-2xl font-bold mb-4">Gerenciar Categorias</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Despesas</h3>
+              <ul className="space-y-2">
+                {expenseCategories.map((cat, index) => (
+                  <li key={index} className="flex items-center gap-2">
+                    <span className="flex-grow p-2 bg-gray-100 rounded-md">{cat}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Receitas</h3>
+              <ul className="space-y-2">
+                {revenueCategories.map((cat, index) => (
+                  <li key={index} className="flex items-center gap-2">
+                    <span className="flex-grow p-2 bg-gray-100 rounded-md">{cat}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-4">Funcionalidade de edição em breve...</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
 function App() {
@@ -1416,24 +1543,53 @@ function App() {
       onAuthStateChanged(firebaseAuth, (user) => {
         if (user) {
           setUserId(user.uid);
+          
+          // --- INÍCIO DO CÓDIGO PARA NOTIFICAÇÕES PUSH ---
           if ("Notification" in window && firebaseConfig.apiKey) {
             const messaging = getMessaging(firebaseApp);
-            const requestPermissionAndToken = async (currentUserId) => {
-              try {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                  const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-                  if (!vapidKey) return;
-                  const currentToken = await getToken(messaging, { vapidKey });
-                  if (currentToken) {
-                    const tokenRef = doc(db, `users/${currentUserId}/fcmTokens`, currentToken);
-                    await setDoc(tokenRef, { token: currentToken, createdAt: serverTimestamp() });
+            
+            // Registra o Service Worker para lidar com notificações em segundo plano
+            navigator.serviceWorker.register('/firebase-messaging-sw.js')
+              .then((registration) => {
+                console.log("Service Worker registrado com sucesso.", registration);
+                const requestPermissionAndToken = async (currentUserId) => {
+                  try {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                      // VAPID Key para web push, copiada do Firebase Cloud Messaging
+                      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+                      if (!vapidKey) {
+                        console.error("Chave VAPID não definida no .env");
+                        return;
+                      }
+                      const currentToken = await getToken(messaging, { vapidKey });
+                      if (currentToken) {
+                        // Salva o token de registro no Firestore para enviar notificações push
+                        const tokenRef = doc(db, `users/${currentUserId}/fcmTokens`, currentToken);
+                        await setDoc(tokenRef, { token: currentToken, createdAt: serverTimestamp() });
+                        console.log("FCM Token salvo com sucesso:", currentToken);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Erro ao obter token ou salvar:', err);
                   }
-                }
-              } catch (err) { console.error('Erro ao obter token.', err); }
-            };
-            requestPermissionAndToken(user.uid);
+                };
+                requestPermissionAndToken(user.uid);
+              })
+              .catch((err) => console.error("Falha ao registrar Service Worker.", err));
+
+            // Lida com mensagens quando o app está em primeiro plano
+            onMessage(messaging, (payload) => {
+              console.log('Mensagem de primeiro plano recebida:', payload);
+              const notificationTitle = payload.notification.title;
+              const notificationOptions = {
+                body: payload.notification.body,
+              };
+              new Notification(notificationTitle, notificationOptions);
+            });
           }
+          // --- FIM DO CÓDIGO PARA NOTIFICAÇÕES PUSH ---
+
         } else {
           setUserId(null);
         }
@@ -1456,6 +1612,7 @@ function App() {
         {view === 'shopping' && <ShoppingList db={db} userId={userId} />}
         {view === 'todo' && <TodoList db={db} userId={userId} />}
         {view === 'calendar' && <CalendarView db={db} userId={userId} />}
+        {view === 'settings' && <SettingsView db={db} userId={userId} />}
       </main>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
     </div>
