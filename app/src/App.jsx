@@ -816,12 +816,14 @@ const FinanceTracker = ({ db, userId }) => {
   const [knownClassifications, setKnownClassifications] = useState({});
   const [userFilter, setUserFilter] = useState('Todos');
   const [classificationFilter, setClassificationFilter] = useState('Todos');
+  const [typeFilter, setTypeFilter] = useState('Todos'); // Novo filtro
   const [activeTab, setActiveTab] = useState('lancamentos');
   const [isFixedCostFilterOpen, setIsFixedCostFilterOpen] = useState(false);
   const [selectedFixedCosts, setSelectedFixedCosts] = useState(['Aluguel', 'Luz', 'Internet', 'Gás', 'Convênio', 'Flag']);
   const expenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
   const revenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
   const [existingTransactionIds, setExistingTransactionIds] = useState(new Set());
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false); // Novo estado para o modal de filtro
 
   const [startDate, setStartDate] = useState(getPreviousMonthRange().start);
   const [endDate, setEndDate] = useState(getPreviousMonthRange().end);
@@ -1015,6 +1017,8 @@ const FinanceTracker = ({ db, userId }) => {
   const filteredHistoryTransactions = transactionsForSummary.filter(t => {
     if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
     if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
+    if (typeFilter !== 'Todos' && t.type !== typeFilter) return false;
+    if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
     return true;
   });
 
@@ -1149,6 +1153,42 @@ const FinanceTracker = ({ db, userId }) => {
           </div>
         </div>
       )}
+
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm space-y-6">
+            <h2 className="text-2xl font-bold text-center">Filtros</h2>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Usuário</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setUserFilter('Todos')} className={`flex-1 py-2 rounded-md ${userFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todos</button>
+                  <button onClick={() => setUserFilter('Karol')} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}>Karol</button>
+                  <button onClick={() => setUserFilter('Raul')} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'bg-blue-400 text-white' : 'bg-gray-200'}`}>Raul</button>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Classificações</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setClassificationFilter('Todos')} className={`flex-1 py-2 rounded-md ${classificationFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todas</button>
+                  <button onClick={() => setClassificationFilter('Classificados')} className={`flex-1 py-2 rounded-md ${classificationFilter === 'Classificados' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Classificadas</button>
+                  <button onClick={() => setClassificationFilter('A Classificar')} className={`flex-1 py-2 rounded-md ${classificationFilter === 'A Classificar' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>A Classificar</button>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Tipo</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setTypeFilter('Todos')} className={`flex-1 py-2 rounded-md ${typeFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todos</button>
+                  <button onClick={() => setTypeFilter('despesa')} className={`flex-1 py-2 rounded-md ${typeFilter === 'despesa' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>Despesa</button>
+                  <button onClick={() => setTypeFilter('receita')} className={`flex-1 py-2 rounded-md ${typeFilter === 'receita' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Receita</button>
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setIsFilterModalOpen(false)} className="w-full mt-4 py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Aplicar e Fechar</button>
+          </div>
+        </div>
+      )}
+
       <header className="p-6 bg-white rounded-xl shadow-lg text-center space-y-4">
         <h1 className="text-3xl font-bold text-gray-900">ContadorZinho</h1>
         <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
@@ -1204,43 +1244,11 @@ const FinanceTracker = ({ db, userId }) => {
               </button>
             </section>
             <section className="bg-white p-6 rounded-xl shadow-lg">
-              <h2 className="text-2xl font-bold mb-4">Importar Extratos</h2>
-              <div className="flex-1 space-y-4 border p-4 rounded-md">
-                <h3 className="text-lg font-semibold text-gray-800">CSV</h3>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="importClassified" checked={isClassifiedImport} onChange={(e) => setIsClassifiedImport(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded" />
-                  <label htmlFor="importClassified" className="text-sm text-gray-600">Importar ficheiro já classificado</label>
-                </div>
-                {!isClassifiedImport && (
-                  <div className="flex gap-4">
-                    <button onClick={() => setImporter('Raul')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Raul' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Raul</button>
-                    <button onClick={() => setImporter('Karol')} className={`flex-1 py-2 px-4 rounded-md text-sm ${importer === 'Karol' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Karol</button>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  ref={csvInputRef}
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  onClick={() => csvInputRef.current.click()}
-                  disabled={isParsing || (!isClassifiedImport && !importer)}
-                  className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isParsing ? 'A importar...' : 'Importar CSV'}
-                </button>
-              </div>
-            </section>
-            <section className="bg-white p-6 rounded-xl shadow-lg">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">Histórico ({unclassifiedCount} por classificar)</h2>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <button onClick={() => setClassificationFilter('Todos')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Todos' ? 'bg-gray-600 text-white' : 'bg-gray-200'}`}>Todas</button>
-                <button onClick={() => setClassificationFilter('Classificados')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'Classificados' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>Classificadas</button>
-                <button onClick={() => setClassificationFilter('A Classificar')} className={`py-1 px-3 rounded-md text-xs ${classificationFilter === 'A Classificar' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}>A Classificar</button>
+                <button onClick={() => setIsFilterModalOpen(true)} className="p-2 rounded-full text-gray-600 hover:bg-gray-200">
+                  <i className="fas fa-filter text-xl"></i>
+                </button>
               </div>
               {filteredHistoryTransactions.map(t => (
                 <div key={t.id} className="py-4 flex justify-between items-center border-b">
