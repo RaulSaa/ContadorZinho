@@ -11,7 +11,7 @@ import {
 import { getFirestore, doc, collection, onSnapshot, addDoc, setDoc, deleteDoc, query, serverTimestamp, updateDoc, arrayUnion, arrayRemove, orderBy, writeBatch } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-// --- FUNÇÕES AUXILIARES DE DATA (MOVIDAS PARA CIMA PARA CORRIGIR O ERRO) ---
+// --- FUNÇÕES AUXILIARES DE DATA ---
 const formatDate = (date) => {
   return date.toISOString().split('T')[0];
 };
@@ -699,7 +699,7 @@ const CalendarView = ({ db, userId }) => {
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg space-y-4">
             <h2 className="text-2xl font-bold">{editingEvent ? 'Editar Evento' : 'Novo Evento'}</h2>
             <input type="text" placeholder="Título do evento" value={eventTitle} onChange={e => setEventTitle(e.target.value)} className="w-full p-2 border rounded-md" />
-            
+             
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <label className="text-sm">Início</label>
@@ -740,62 +740,62 @@ const CalendarView = ({ db, userId }) => {
           </div>
         </div>
       )}
-      <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
-        <div className="flex justify-between items-center">
-          <button onClick={() => changeDate(-1)} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-chevron-left"></i></button>
-          <h1 className="text-xl md:text-3xl font-bold text-gray-800">{new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(currentDate)}</h1>
-          <button onClick={() => changeDate(1)} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-chevron-right"></i></button>
-        </div>
-      </header>
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <div className="grid grid-cols-7 gap-1 text-center font-bold text-gray-600 mb-2">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => <div key={day}>{day}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {getDaysForMonth().map(dayInfo => (
-            <div key={dayInfo.key}
-              onClick={() => !dayInfo.isEmpty && setSelectedDate(dayInfo.date)}
-              className={`p-2 h-24 text-center border rounded-lg cursor-pointer transition-colors relative
-                ${dayInfo.isEmpty ? 'bg-gray-50' : 'hover:bg-gray-100'}
-                ${dayInfo.isToday ? 'bg-indigo-100 font-bold' : ''}
-                ${dayInfo.holiday ? 'bg-blue-100' : ''}
-                ${dayInfo.hasEvents ? 'bg-yellow-100' : ''}
-                ${selectedDate?.toDateString() === dayInfo.date?.toDateString() ? 'ring-2 ring-indigo-500' : ''}`}>
-              <span className="text-sm">{dayInfo.day}</span>
-              {dayInfo.hasEvents && dayInfo.holiday && <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-orange-500"></div>}
-            </div>
-          ))}
-        </div>
-      </div>
-      {selectedDate && (
-        <div className="mt-8 bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-2xl font-bold mb-4">Eventos para {selectedDate.toLocaleDateString('pt-BR')}</h2>
-          {selectedDayEvents.length > 0 ? (
-            <ul className="space-y-3">
-              {selectedDayEvents.map((event, index) => (
-                <li key={index} onClick={() => event.type === 'event' && openEditModal(event)}
-                  className={`p-3 rounded-lg flex items-center gap-3 ${event.type === 'event' ? 'bg-yellow-50 hover:bg-yellow-100 cursor-pointer' : 'bg-blue-50'}`}>
-                  <i className={`fas ${event.type === 'holiday' ? 'fa-glass-cheers text-blue-500' : 'fa-clock text-yellow-600'}`}></i>
-                  <div>
-                    <p className="font-semibold">{event.title || event.name}</p>
-                    {event.type === 'event' && (
-                      <p className="text-sm text-gray-600">
-                        {new Date(event.start.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Nenhum evento para este dia.</p>
-          )}
-        </div>
-      )}
-      <button onClick={openCreateModal} className="fixed bottom-6 right-6 h-16 w-16 flex items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700">
-        <i className="fas fa-plus text-2xl"></i>
-      </button>
-    </div>
+      <header className="p-6 bg-white rounded-xl shadow-lg text-center mb-8">
+        <div className="flex justify-between items-center">
+          <button onClick={() => changeDate(-1)} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-chevron-left"></i></button>
+          <h1 className="text-xl md:text-3xl font-bold text-gray-800">{new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(currentDate)}</h1>
+          <button onClick={() => changeDate(1)} className="p-2 rounded-full hover:bg-gray-200"><i className="fas fa-chevron-right"></i></button>
+        </div>
+      </header>
+      <div className="bg-white p-6 rounded-xl shadow-lg">
+        <div className="grid grid-cols-7 gap-1 text-center font-bold text-gray-600 mb-2">
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => <div key={day}>{day}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {getDaysForMonth().map(dayInfo => (
+            <div key={dayInfo.key}
+              onClick={() => !dayInfo.isEmpty && setSelectedDate(dayInfo.date)}
+              className={`p-2 h-24 text-center border rounded-lg cursor-pointer transition-colors relative
+                ${dayInfo.isEmpty ? 'bg-gray-50' : 'hover:bg-gray-100'}
+                ${dayInfo.isToday ? 'bg-indigo-100 font-bold' : ''}
+                ${dayInfo.holiday ? 'bg-blue-100' : ''}
+                ${dayInfo.hasEvents ? 'bg-yellow-100' : ''}
+                ${selectedDate?.toDateString() === dayInfo.date?.toDateString() ? 'ring-2 ring-indigo-500' : ''}`}>
+              <span className="text-sm">{dayInfo.day}</span>
+              {dayInfo.hasEvents && dayInfo.holiday && <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-orange-500"></div>}
+            </div>
+          ))}
+        </div>
+      </div>
+      {selectedDate && (
+        <div className="mt-8 bg-white p-6 rounded-xl shadow-lg">
+          <h2 className="text-2xl font-bold mb-4">Eventos para {selectedDate.toLocaleDateString('pt-BR')}</h2>
+          {selectedDayEvents.length > 0 ? (
+            <ul className="space-y-3">
+              {selectedDayEvents.map((event, index) => (
+                <li key={index} onClick={() => event.type === 'event' && openEditModal(event)}
+                  className={`p-3 rounded-lg flex items-center gap-3 ${event.type === 'event' ? 'bg-yellow-50 hover:bg-yellow-100 cursor-pointer' : 'bg-blue-50'}`}>
+                  <i className={`fas ${event.type === 'holiday' ? 'fa-glass-cheers text-blue-500' : 'fa-clock text-yellow-600'}`}></i>
+                  <div>
+                    <p className="font-semibold">{event.title || event.name}</p>
+                    {event.type === 'event' && (
+                      <p className="text-sm text-gray-600">
+                        {new Date(event.start.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Nenhum evento para este dia.</p>
+          )}
+        </div>
+      )}
+      <button onClick={openCreateModal} className="fixed bottom-6 right-6 h-16 w-16 flex items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700">
+        <i className="fas fa-plus text-2xl"></i>
+      </button>
+      </div>
   );
 };
 
@@ -1415,375 +1415,13 @@ const CategoryConfig = ({ db, userId, onBack, expenseCategories, revenueCategori
   const [newExpenseCategory, setNewExpenseCategory] = useState('');
   const [newRevenueCategory, setNewRevenueCategory] = useState('');
   const [editingIndex, setEditingIndex] = useState({ type: null, index: null });
-  const [localExpenseCategories, setLocalExpenseCategories] = useState(expenseCategories);
-  const [localRevenueCategories, setLocalRevenueCategories] = useState(revenueCategories);
-
-
-  const handleSaveCategories = async () => {
-    try {
-      setLoading(true);
-      await setDoc(doc(db, `users/${userId}/config/categories`), {
-        expenseCategories: localExpenseCategories,
-        revenueCategories: localRevenueCategories,
-      }, { merge: true });
-      alert('Categorias salvas com sucesso!');
-    } catch (e) {
-      alert('Erro ao salvar categorias.');
-      console.error("Erro ao salvar categorias:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddCategory = (category, type) => {
-    if (type === 'expense' && category) {
-      setLocalExpenseCategories([...localExpenseCategories, category]);
-      setNewExpenseCategory('');
-    }
-    if (type === 'revenue' && category) {
-      setLocalRevenueCategories([...localRevenueCategories, category]);
-      setNewRevenueCategory('');
-    }
-  };
-
-  const handleRemoveCategory = (categoryToRemove, type) => {
-    if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
-      if (type === 'expense') {
-        setLocalExpenseCategories(localExpenseCategories.filter(cat => cat !== categoryToRemove));
-      }
-      if (type === 'revenue') {
-        setLocalRevenueCategories(localRevenueCategories.filter(cat => cat !== categoryToRemove));
-      }
-    }
-  };
-
-  const handleEditChange = (e, type, index) => {
-    const updatedList = (type === 'expense' ? [...localExpenseCategories] : [...localRevenueCategories]);
-    updatedList[index] = e.target.value;
-    if (type === 'expense') {
-      setLocalExpenseCategories(updatedList);
-    } else {
-      setLocalRevenueCategories(updatedList);
-    }
-  };
-
-  const startEditing = (type, index) => {
-    setEditingIndex({ type, index });
-  };
-
-  const stopEditing = () => {
-    setEditingIndex({ type: null, index: null });
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      stopEditing();
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-      <div className="flex items-center gap-4 border-b pb-4 mb-4">
-        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-          <i className="fas fa-chevron-left"></i>
-        </button>
-        <h2 className="text-2xl font-bold">Gerenciar Listas de Gastos</h2>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h3 className="text-xl font-semibold mb-2">Despesas</h3>
-          <ul className="space-y-2">
-            {localExpenseCategories.map((cat, index) => (
-              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
-                {editingIndex.type === 'expense' && editingIndex.index === index ? (
-                  <input
-                    type="text"
-                    value={cat}
-                    onChange={(e) => handleEditChange(e, 'expense', index)}
-                    onBlur={stopEditing}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
-                  />
-                ) : (
-                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('expense', index)}>{cat}</span>
-                )}
-                <button onClick={() => handleRemoveCategory(cat, 'expense')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i className="fas fa-trash-alt"></i>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2 mt-4">
-            <input
-              type="text"
-              value={newExpenseCategory}
-              onChange={(e) => setNewExpenseCategory(e.target.value)}
-              placeholder="Nova categoria de despesa"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <button onClick={() => handleAddCategory(newExpenseCategory, 'expense')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-          </div>
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold mb-2">Receitas</h3>
-          <ul className="space-y-2">
-            {localRevenueCategories.map((cat, index) => (
-              <li key={cat + index} className="flex items-center gap-2 p-2 bg-gray-100 rounded-md group">
-                {editingIndex.type === 'revenue' && editingIndex.index === index ? (
-                  <input
-                    type="text"
-                    value={cat}
-                    onChange={(e) => handleEditChange(e, 'revenue', index)}
-                    onBlur={stopEditing}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    className="flex-grow p-1 rounded-md border-2 border-indigo-600"
-                  />
-                ) : (
-                  <span className="flex-grow cursor-pointer" onClick={() => startEditing('revenue', index)}>{cat}</span>
-                )}
-                <button onClick={() => handleRemoveCategory(cat, 'revenue')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i className="fas fa-trash-alt"></i>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2 mt-4">
-            <input
-              type="text"
-              value={newRevenueCategory}
-              onChange={(e) => setNewRevenueCategory(e.target.value)}
-              placeholder="Nova categoria de receita"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <button onClick={() => handleAddCategory(newRevenueCategory, 'revenue')} className="py-2 px-4 rounded-md text-white bg-green-600 hover:bg-green-700">Adicionar</button>
-          </div>
-        </div>
-      </div>
-      <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-        {loading ? 'Salvando...' : 'Salvar Categorias'}
-      </button>
-    </div>
-  );
-};
-
-// Sub-componente para a tela de configurações da conta
-const AccountConfig = ({ onBack }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-    <div className="flex items-center gap-4 border-b pb-4 mb-4">
-      <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-        <i className="fas fa-chevron-left"></i>
-      </button>
-      <h2 className="text-2xl font-bold">Minha Conta</h2>
-    </div>
-    <div className="space-y-4">
-      <p className="text-gray-600">Funcionalidade de edição de e-mail e senha em breve...</p>
-    </div>
-  </div>
-);
-
-// Componente principal de Configurações
-const SettingsView = ({ db, userId, expenseCategories, revenueCategories }) => {
-  const [subView, setSubView] = useState(null);
-
-  const renderSubView = () => {
-    switch (subView) {
-      case 'users':
-        return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
-      case 'categories':
-        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} expenseCategories={expenseCategories} revenueCategories={revenueCategories} />;
-      case 'account':
-        return <AccountConfig onBack={() => setSubView(null)} />;
-      default:
-        return (
-          <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
-            <header className="border-b pb-4 mb-4">
-              <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
-            </header>
-            <button onClick={() => setSubView('users')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Usuários</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-            <button onClick={() => setSubView('categories')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Listas de gastos</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-            <button onClick={() => setSubView('account')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Minha Conta</span>
-              <i className="fas fa-chevron-right text-gray-400"></i>
-            </button>
-          </div>
-        );
-    }
-  };
-
-  return (
-    <div className="p-4 md:p-8">
-      {renderSubView()}
-    </div>
-  );
-};
-
-// --- TELA DE LOGIN E REGISTO ---
-const AuthScreen = ({ auth }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
-  const [error, setError] = useState('');
-
-  const handleAuthAction = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
-    } catch (err) {
-      setError(err.message.replace('Firebase: ', '').replace('Error ', '').replace(/ \(auth.*\)\.?/, ''));
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">{isLogin ? 'Login' : 'Registo'}</h2>
-        <form onSubmit={handleAuthAction} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-            <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm" />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha</label>
-            <input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm" />
-          </div>
-          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-          <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-            {isLogin ? 'Entrar' : 'Criar Conta'}
-          </button>
-        </form>
-        <div className="text-center mt-6">
-          <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-            {isLogin ? 'Não tem uma conta? Registe-se' : 'Já tem uma conta? Faça login'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- NOVO COMPONENTE DE CONFIGURAÇÕES ---
-
-// Sub-componente para a tela de edição de usuários
-const UserConfig = ({ db, userId, onBack }) => {
-  const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState([
-    { name: 'Karol', color: '#8b5cf6' },
-    { name: 'Raul', color: '#60a5fa' },
-  ]);
-
-  useEffect(() => {
-    if (!db || !userId) return;
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setUsers(data.users || []);
-      }
-    });
-    return () => unsubscribe();
-  }, [db, userId]);
-
-  const handleEditUser = (index, field, value) => {
-    const updatedUsers = [...users];
-    updatedUsers[index][field] = value;
-    setUsers(updatedUsers);
-  };
-
-  const handleSaveUsers = async () => {
-    try {
-      setLoading(true);
-      await setDoc(doc(db, `users/${userId}/config/users`), { users }, { merge: true });
-      alert('Usuários salvos com sucesso!');
-    } catch (e) {
-      alert('Erro ao salvar usuários.');
-      console.error("Erro ao salvar usuários:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-      <div className="flex items-center gap-4 border-b pb-4 mb-4">
-        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-          <i className="fas fa-chevron-left"></i>
-        </button>
-        <h2 className="text-2xl font-bold">Personalizar Usuários</h2>
-      </div>
-      <div className="space-y-4">
-        {users.map((user, index) => (
-          <div key={index} className="flex flex-col sm:flex-row items-center gap-4">
-            <input
-              type="text"
-              value={user.name}
-              onChange={(e) => handleEditUser(index, 'name', e.target.value)}
-              placeholder="Nome do usuário"
-              className="flex-grow p-2 border rounded-md"
-            />
-            <input
-              type="color"
-              value={user.color}
-              onChange={(e) => handleEditUser(index, 'color', e.target.value)}
-              className="w-12 h-12 rounded-full cursor-pointer"
-              title="Escolha a cor"
-            />
-          </div>
-        ))}
-      </div>
-      <button onClick={handleSaveUsers} disabled={loading} className="w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-        {loading ? 'Salvando...' : 'Salvar Usuários'}
-      </button>
-    </div>
-  );
-};
-
-// Sub-componente para a tela de edição de categorias
-const CategoryConfig = ({ db, userId, onBack }) => {
-  const [loading, setLoading] = useState(false);
-  const [expenseCategories, setExpenseCategories] = useState([]);
-  const [revenueCategories, setRevenueCategories] = useState([]);
-  const [newExpenseCategory, setNewExpenseCategory] = useState('');
-  const [newRevenueCategory, setNewRevenueCategory] = useState('');
-  const [editingIndex, setEditingIndex] = useState({ type: null, index: null });
-
-  useEffect(() => {
-    if (!db || !userId) return;
-    const defaultExpenseCategories = ['Aluguel', 'Contas', 'Alimentação', 'Transporte', 'Lazer', 'Outros'];
-    const defaultRevenueCategories = ['Salário', 'Investimentos', 'Renda Extra', 'Outros'];
-
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setExpenseCategories(data.expenseCategories && data.expenseCategories.length > 0 ? data.expenseCategories : defaultExpenseCategories);
-        setRevenueCategories(data.revenueCategories && data.revenueCategories.length > 0 ? data.revenueCategories : defaultRevenueCategories);
-      } else {
-        // Se o documento não existe, inicializa com as categorias padrão
-        setExpenseCategories(defaultExpenseCategories);
-        setRevenueCategories(defaultRevenueCategories);
-      }
-    });
-    return () => unsubscribe();
-  }, [db, userId]);
   
   const handleSaveCategories = async () => {
     try {
       setLoading(true);
       await setDoc(doc(db, `users/${userId}/config/categories`), {
-        expenseCategories,
-        revenueCategories
+        expenseCategories: expenseCategories,
+        revenueCategories: revenueCategories,
       }, { merge: true });
       alert('Categorias salvas com sucesso!');
     } catch (e) {
@@ -1796,11 +1434,13 @@ const CategoryConfig = ({ db, userId, onBack }) => {
 
   const handleAddCategory = (category, type) => {
     if (type === 'expense' && category) {
-      setExpenseCategories([...expenseCategories, category]);
+      const updatedList = [...expenseCategories, category];
+      setDoc(doc(db, `users/${userId}/config/categories`), { expenseCategories: updatedList }, { merge: true });
       setNewExpenseCategory('');
     }
     if (type === 'revenue' && category) {
-      setRevenueCategories([...revenueCategories, category]);
+      const updatedList = [...revenueCategories, category];
+      setDoc(doc(db, `users/${userId}/config/categories`), { revenueCategories: updatedList }, { merge: true });
       setNewRevenueCategory('');
     }
   };
@@ -1808,10 +1448,12 @@ const CategoryConfig = ({ db, userId, onBack }) => {
   const handleRemoveCategory = (categoryToRemove, type) => {
     if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
       if (type === 'expense') {
-        setExpenseCategories(expenseCategories.filter(cat => cat !== categoryToRemove));
+        const updatedList = expenseCategories.filter(cat => cat !== categoryToRemove);
+        setDoc(doc(db, `users/${userId}/config/categories`), { expenseCategories: updatedList }, { merge: true });
       }
       if (type === 'revenue') {
-        setRevenueCategories(revenueCategories.filter(cat => cat !== categoryToRemove));
+        const updatedList = revenueCategories.filter(cat => cat !== categoryToRemove);
+        setDoc(doc(db, `users/${userId}/config/categories`), { revenueCategories: updatedList }, { merge: true });
       }
     }
   };
@@ -1820,9 +1462,9 @@ const CategoryConfig = ({ db, userId, onBack }) => {
     const updatedList = (type === 'expense' ? [...expenseCategories] : [...revenueCategories]);
     updatedList[index] = e.target.value;
     if (type === 'expense') {
-      setExpenseCategories(updatedList);
+      setDoc(doc(db, `users/${userId}/config/categories`), { expenseCategories: updatedList }, { merge: true });
     } else {
-      setRevenueCategories(updatedList);
+      setDoc(doc(db, `users/${userId}/config/categories`), { revenueCategories: updatedList }, { merge: true });
     }
   };
 
@@ -1921,15 +1563,27 @@ const CategoryConfig = ({ db, userId, onBack }) => {
           </div>
         </div>
       </div>
-      <button onClick={handleSaveCategories} disabled={loading} className="mt-6 w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-        {loading ? 'Salvando...' : 'Salvar Categorias'}
-      </button>
     </div>
   );
 };
 
+// Sub-componente para a tela de configurações da conta
+const AccountConfig = ({ onBack }) => (
+  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+    <div className="flex items-center gap-4 border-b pb-4 mb-4">
+      <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
+        <i className="fas fa-chevron-left"></i>
+      </button>
+      <h2 className="text-2xl font-bold">Minha Conta</h2>
+    </div>
+    <div className="space-y-4">
+      <p className="text-gray-600">Funcionalidade de edição de e-mail e senha em breve...</p>
+    </div>
+  </div>
+);
+
 // Componente principal de Configurações
-const SettingsView = ({ db, userId }) => {
+const SettingsView = ({ db, userId, expenseCategories, revenueCategories }) => {
   const [subView, setSubView] = useState(null);
 
   const renderSubView = () => {
@@ -1937,7 +1591,7 @@ const SettingsView = ({ db, userId }) => {
       case 'users':
         return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
       case 'categories':
-        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
+        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} expenseCategories={expenseCategories} revenueCategories={revenueCategories} />;
       case 'account':
         return <AccountConfig onBack={() => setSubView(null)} />;
       default:
@@ -1969,132 +1623,5 @@ const SettingsView = ({ db, userId }) => {
     </div>
   );
 };
-
-
-// --- COMPONENTE PRINCIPAL QUE GERE A VISUALIZAÇÃO ---
-function App() {
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [view, setView] = useState('finance');
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [appCategories, setAppCategories] = useState({ expense: [], revenue: [] });
-
-  useEffect(() => {
-    try {
-      const firebaseConfig = {
-        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: import.meta.env.VITE_FIREBASE_APP_ID,
-        measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-      };
-
-      if (!firebaseConfig.apiKey) console.error("Chaves do Firebase não foram carregadas.");
-
-      const firebaseApp = initializeApp(firebaseConfig);
-      const firebaseAuth = getAuth(firebaseApp);
-      const firestoreDb = getFirestore(firebaseApp);
-      setDb(firestoreDb);
-      setAuth(firebaseAuth);
-
-      onAuthStateChanged(firebaseAuth, (user) => {
-        if (user) {
-          setUserId(user.uid);
-          
-          // --- INÍCIO DO CÓDIGO PARA NOTIFICAÇÕES PUSH ---
-          if ("Notification" in window && firebaseConfig.apiKey) {
-            const messaging = getMessaging(firebaseApp);
-            
-            // Registra o Service Worker para lidar com notificações em segundo plano
-            navigator.serviceWorker.register('/firebase-messaging-sw.js')
-              .then((registration) => {
-                console.log("Service Worker registrado com sucesso.", registration);
-                const requestPermissionAndToken = async (currentUserId) => {
-                  try {
-                    const permission = await Notification.requestPermission();
-                    if (permission === 'granted') {
-                      // VAPID Key para web push, copiada do Firebase Cloud Messaging
-                      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-                      if (!vapidKey) {
-                        console.error("Chave VAPID não definida no .env");
-                        return;
-                      }
-                      const currentToken = await getToken(messaging, { vapidKey });
-                      if (currentToken) {
-                        // Salva o token de registro no Firestore para enviar notificações push
-                        const tokenRef = doc(db, `users/${currentUserId}/fcmTokens`, currentToken);
-                        await setDoc(tokenRef, { token: currentToken, createdAt: serverTimestamp() });
-                        console.log("FCM Token salvo com sucesso:", currentToken);
-                      }
-                    }
-                  } catch (err) {
-                    console.error('Erro ao obter token ou salvar:', err);
-                  }
-                };
-                requestPermissionAndToken(user.uid);
-              })
-              .catch((err) => console.error("Falha ao registrar Service Worker.", err));
-
-            // Lida com mensagens quando o app está em primeiro plano
-            onMessage(messaging, (payload) => {
-              console.log('Mensagem de primeiro plano recebida:', payload);
-              const notificationTitle = payload.notification.title;
-              const notificationOptions = {
-                body: payload.notification.body,
-              };
-              new Notification(notificationTitle, notificationOptions);
-            });
-          }
-          // --- FIM DO CÓDIGO PARA NOTIFICAÇÕES PUSH ---
-
-          // --- NOVO: Carregar categorias do Firestore
-          const defaultExpenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
-          const defaultRevenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
-          onSnapshot(doc(firestoreDb, `users/${user.uid}/config/categories`), (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              setAppCategories({
-                expense: data.expenseCategories || defaultExpenseCategories,
-                revenue: data.revenueCategories || defaultRevenueCategories,
-              });
-            } else {
-              setAppCategories({
-                expense: defaultExpenseCategories,
-                revenue: defaultRevenueCategories,
-              });
-            }
-          });
-
-        } else {
-          setUserId(null);
-        }
-        setIsAuthReady(true);
-      });
-    } catch (e) {
-      console.error("Erro na inicialização do Firebase:", e);
-      setIsAuthReady(true);
-    }
-  }, []);
-
-  if (!isAuthReady) return <LoadingScreen />;
-  if (!userId) return <AuthScreen auth={auth} />;
-
-  return (
-    <div className="relative min-h-screen md:flex">
-      <Sidebar view={view} setView={setView} auth={auth} />
-      <main className="flex-1 md:ml-64 bg-gray-100">
-        {view === 'finance' && <FinanceTracker db={db} userId={userId} expenseCategories={appCategories.expense} revenueCategories={appCategories.revenue} />}
-        {view === 'shopping' && <ShoppingList db={db} userId={userId} />}
-        {view === 'todo' && <TodoList db={db} userId={userId} />}
-        {view === 'calendar' && <CalendarView db={db} userId={userId} />}
-        {view === 'settings' && <SettingsView db={db} userId={userId} expenseCategories={appCategories.expense} revenueCategories={appCategories.revenue} />}
-      </main>
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-    </div>
-  );
-}
 
 export default App;
