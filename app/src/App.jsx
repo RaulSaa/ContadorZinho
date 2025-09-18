@@ -1471,11 +1471,18 @@ const CategoryConfig = ({ db, userId, onBack }) => {
 
   useEffect(() => {
     if (!db || !userId) return;
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setExpenseCategories(data.expenseCategories || []);
-        setRevenueCategories(data.revenueCategories || []);
+    const defaultExpenseCategories = ['Aluguel', 'Contas', 'Alimentação', 'Transporte', 'Lazer', 'Outros'];
+    const defaultRevenueCategories = ['Salário', 'Investimentos', 'Renda Extra', 'Outros'];
+
+    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setExpenseCategories(data.expenseCategories && data.expenseCategories.length > 0 ? data.expenseCategories : defaultExpenseCategories);
+        setRevenueCategories(data.revenueCategories && data.revenueCategories.length > 0 ? data.revenueCategories : defaultRevenueCategories);
+      } else {
+        // Se o documento não existe, inicializa com as categorias padrão
+        setExpenseCategories(defaultExpenseCategories);
+        setRevenueCategories(defaultRevenueCategories);
       }
     });
     return () => unsubscribe();
