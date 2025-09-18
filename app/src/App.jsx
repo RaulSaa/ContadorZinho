@@ -1638,21 +1638,6 @@ const CategoryConfig = ({ db, userId, onBack }) => {
   );
 };
 
-// Sub-componente para a tela de configurações da conta
-const AccountConfig = ({ onBack }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
-    <div className="flex items-center gap-4 border-b pb-4 mb-4">
-      <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
-        <i className="fas fa-chevron-left"></i>
-      </button>
-      <h2 className="text-2xl font-bold">Minha Conta</h2>
-    </div>
-    <div className="space-y-4">
-      <p className="text-gray-600">Funcionalidade de edição de e-mail e senha em breve...</p>
-    </div>
-  </div>
-);
-
 // Componente principal de Configurações
 const SettingsView = ({ db, userId }) => {
   const [subView, setSubView] = useState(null);
