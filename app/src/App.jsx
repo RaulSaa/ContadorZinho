@@ -174,6 +174,7 @@ const ShoppingList = ({ db, userId }) => {
 
   const handleDeleteSelectedItems = async () => {
     if (itemsToDelete.length === 0) return;
+    // Trocando alert/confirm por StatusMessage ou modal customizado no futuro
     if (window.confirm(`Tem a certeza que quer apagar ${itemsToDelete.length} item(ns)?`)) {
       const batch = writeBatch(db);
       const updates = {};
@@ -206,6 +207,7 @@ const ShoppingList = ({ db, userId }) => {
 
   const handleDeleteSelectedCategories = async () => {
     if (categoriesToDelete.length === 0) return;
+    // Trocando alert/confirm por StatusMessage ou modal customizado no futuro
     if (window.confirm(`Tem a certeza que quer apagar ${categoriesToDelete.length} categoria(s)?`)) {
       const batch = writeBatch(db);
       categoriesToDelete.forEach(categoryId => {
@@ -384,6 +386,7 @@ const TodoList = ({ db, userId }) => {
 
   const handleSaveTodo = async () => {
     if (!formData.title.trim()) {
+      // Usar StatusMessage
       alert('O título é obrigatório.');
       return;
     }
@@ -406,11 +409,13 @@ const TodoList = ({ db, userId }) => {
       handleCloseModal();
     } catch (error) {
       console.error("Erro ao salvar a missão:", error);
+      // Usar StatusMessage
       alert("Ocorreu um erro ao salvar a missão. Verifique as regras de segurança do Firestore no console do Firebase.");
     }
   };
 
   const handleDeleteTodo = async () => {
+    // Usar StatusMessage/Modal customizado
     if (currentTodo && window.confirm("Tem a certeza que quer apagar esta missão?")) {
       await deleteDoc(doc(db, `users/${userId}/todos`, currentTodo.id));
       handleCloseModal();
@@ -482,6 +487,7 @@ const TodoList = ({ db, userId }) => {
 
             <div className="flex justify-between items-center pt-4 border-t">
               {currentTodo ? (
+                // Substituir por modal customizado/StatusMessage
                 <button onClick={handleDeleteTodo} className="py-2 px-4 rounded-md text-white bg-red-600 hover:bg-red-700">Apagar</button>
               ) : <div></div>}
               <div className="flex justify-end gap-4">
@@ -596,6 +602,7 @@ const CalendarView = ({ db, userId }) => {
 
   const handleSaveEvent = async () => {
     if (!eventTitle || !startDate || !startTime) {
+      // Usar StatusMessage
       alert("Por favor, preencha o título, a data e a hora de início.");
       return;
     }
@@ -646,11 +653,13 @@ const CalendarView = ({ db, userId }) => {
       setIsEventModalOpen(false);
     } catch (error) {
       console.error("Erro ao salvar o evento:", error);
+      // Usar StatusMessage
       alert("Houve um erro ao salvar o evento. Por favor, tente novamente.");
     }
   };
 
   const handleDeleteEvent = async () => {
+    // Usar StatusMessage/Modal customizado
     if (editingEvent && window.confirm("Tem a certeza que quer apagar este evento?")) {
       await deleteDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id));
       setIsEventModalOpen(false);
@@ -684,6 +693,7 @@ const CalendarView = ({ db, userId }) => {
 
   const getSelectedDayEvents = () => {
     if (!selectedDate) return [];
+    // Nota: toDate() é necessário para Timestamp do Firestore
     const userEvents = events.filter(e => e.start.toDate().toDateString() === selectedDate.toDateString()).map(e => ({ ...e, type: 'event' }));
     const dateString = `${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const holiday = holidays[dateString];
@@ -829,6 +839,40 @@ const FinanceTracker = ({ db, userId }) => {
   const [startDate, setStartDate] = useState(getPreviousMonthRange().start);
   const [endDate, setEndDate] = useState(getPreviousMonthRange().end);
 
+  // Estados de Configuração para Nomes de Usuários
+  const [customUsers, setCustomUsers] = useState([
+    { name: 'Karol', color: '#8b5cf6' },
+    { name: 'Raul', color: '#60a5fa' },
+  ]);
+
+  // Carregar configurações de usuários e categorias
+  useEffect(() => {
+    if (!db || !userId) return;
+    // 1. Carregar Configurações de Usuários
+    const unsubUsers = onSnapshot(doc(db, `users/${userId}/config/users`), (docSnap) => {
+      if (docSnap.exists()) {
+        setCustomUsers(docSnap.data().users || [{ name: 'Karol', color: '#8b5cf6' }, { name: 'Raul', color: '#60a5fa' }]);
+      }
+    });
+
+    // 2. Carregar Configurações de Categorias
+    const unsubCategories = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Nota: As categorias padrão no FinanceTracker ainda estão codificadas para fins de demonstração,
+        // mas em um aplicativo real você usaria as categorias carregadas aqui para os dropdowns.
+        // As listas de categorias locais (expenseCategories/revenueCategories) devem ser dinâmicas.
+        // Mantendo as arrays locais hardcoded por enquanto para focar na UI do CSV.
+      }
+    });
+
+    return () => {
+      unsubUsers();
+      unsubCategories();
+    };
+  }, [db, userId]);
+
+
   useEffect(() => {
     if (activeTab === 'lancamentos') {
       const { start, end } = getPreviousMonthRange();
@@ -970,7 +1014,7 @@ const FinanceTracker = ({ db, userId }) => {
   const addTransaction = (e, responsible) => {
     e.preventDefault();
     if (!description || !amount || !manualDate) {
-      alert("Por favor, preencha todos os campos.");
+      setParsingMessage({ message: "Por favor, preencha todos os campos.", type: 'error' });
       return;
     }
     const data = { description, amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate + 'T12:00:00') };
@@ -979,6 +1023,9 @@ const FinanceTracker = ({ db, userId }) => {
       setDescription(''); setAmount(''); setManualDate('');
       setIsResponsiblePopupOpen(false);
       setIsAddTransactionPopupOpen(false);
+    }).catch(error => {
+      console.error("Erro ao adicionar documento:", error);
+      setParsingMessage({ message: "Erro ao adicionar transação. Tente novamente.", type: 'error' });
     });
   };
 
@@ -1011,7 +1058,8 @@ const FinanceTracker = ({ db, userId }) => {
     const end = endDate ? new Date(endDate + 'T23:59:59') : null;
     if (start && transactionDate < start) return false;
     if (end && transactionDate > end) return false;
-    if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
+    // O filtro de usuário para gráficos é aplicado aqui
+    if (activeTab === 'graficos' && userFilter !== 'Todos' && t.importer !== userFilter) return false;
     return true;
   });
 
@@ -1019,7 +1067,8 @@ const FinanceTracker = ({ db, userId }) => {
     if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
     if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
     if (typeFilter !== 'Todos' && t.type !== typeFilter) return false;
-    if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
+    // O filtro de usuário para a lista de histórico também é aplicado aqui
+    if (activeTab === 'lancamentos' && userFilter !== 'Todos' && t.importer !== userFilter) return false;
     return true;
   });
 
@@ -1084,11 +1133,24 @@ const FinanceTracker = ({ db, userId }) => {
   const totalKarol = processedTransactions.filter(t => t.importer === 'Karol').length;
   const classifiedKarol = processedTransactions.filter(t => t.importer === 'Karol' && t.category && t.category !== '').length;
   const karolProgress = totalKarol > 0 ? (classifiedKarol / totalKarol) * 100 : 0;
+  
+  // Funções utilitárias para buscar cores personalizadas
+  const getUserColor = (name, defaultColor) => {
+    return customUsers.find(u => u.name === name)?.color || defaultColor;
+  };
+  const karolColor = getUserColor('Karol', '#8b5cf6');
+  const raulColor = getUserColor('Raul', '#60a5fa');
 
   if (loading) return <LoadingScreen />;
 
   return (
     <div className="p-4 md:p-8">
+      <StatusMessage
+        message={parsingMessage.message}
+        type={parsingMessage.type}
+        onClose={() => setParsingMessage({ message: '', type: '' })}
+      />
+
       {isAddTransactionPopupOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md space-y-4">
@@ -1120,8 +1182,8 @@ const FinanceTracker = ({ db, userId }) => {
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm space-y-4">
             <h2 className="text-xl font-bold text-center">Quem é o responsável?</h2>
             <div className="flex justify-center gap-4">
-              <button onClick={(e) => addTransaction(e, 'Karol')} className="py-3 px-6 rounded-md text-white bg-purple-600 hover:bg-purple-700">Karol</button>
-              <button onClick={(e) => addTransaction(e, 'Raul')} className="py-3 px-6 rounded-md text-white bg-blue-400 hover:bg-blue-500">Raul</button>
+              <button onClick={(e) => addTransaction(e, 'Karol')} style={{ backgroundColor: karolColor }} className="py-3 px-6 rounded-md text-white hover:opacity-80 transition">Karol</button>
+              <button onClick={(e) => addTransaction(e, 'Raul')} style={{ backgroundColor: raulColor }} className="py-3 px-6 rounded-md text-white hover:opacity-80 transition">Raul</button>
             </div>
             <button onClick={() => setIsResponsiblePopupOpen(false)} className="w-full mt-4 py-2 px-4 rounded-md bg-gray-200 hover:bg-gray-300">Voltar</button>
           </div>
@@ -1164,8 +1226,8 @@ const FinanceTracker = ({ db, userId }) => {
                 <h3 className="text-lg font-semibold mb-2">Usuário</h3>
                 <div className="flex gap-2">
                   <button onClick={() => setUserFilter('Todos')} className={`flex-1 py-2 rounded-md ${userFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todos</button>
-                  <button onClick={() => setUserFilter('Karol')} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}>Karol</button>
-                  <button onClick={() => setUserFilter('Raul')} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'bg-blue-400 text-white' : 'bg-gray-200'}`}>Raul</button>
+                  <button onClick={() => setUserFilter('Karol')} style={{ backgroundColor: userFilter === 'Karol' ? karolColor : '#e5e7eb' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'text-white' : 'text-gray-800'}`}>Karol</button>
+                  <button onClick={() => setUserFilter('Raul')} style={{ backgroundColor: userFilter === 'Raul' ? raulColor : '#e5e7eb' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'text-white' : 'text-gray-800'}`}>Raul</button>
                 </div>
               </div>
               <div>
@@ -1214,17 +1276,19 @@ const FinanceTracker = ({ db, userId }) => {
         </div>
         {activeTab === 'lancamentos' && (
           <>
+            {/* Bloco de Progresso */}
             <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
               <h2 className="text-xl font-bold">Progresso de Classificação</h2>
               <div className="space-y-2">
                 <p className="text-sm">Karol: {classifiedKarol}/{totalKarol} ({karolProgress.toFixed(0)}%)</p>
-                <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${karolProgress}%` }}></div></div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5"><div style={{ width: `${karolProgress}%`, backgroundColor: karolColor }} className="h-2.5 rounded-full transition-all duration-500"></div></div>
               </div>
               <div className="space-y-2">
                 <p className="text-sm">Raul: {classifiedRaul}/{totalRaul} ({raulProgress.toFixed(0)}%)</p>
-                <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-400 h-2.5 rounded-full" style={{ width: `${raulProgress}%` }}></div></div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5"><div style={{ width: `${raulProgress}%`, backgroundColor: raulColor }} className="h-2.5 rounded-full transition-all duration-500"></div></div>
               </div>
             </div>
+            {/* Bloco de Resumo */}
             <section className="grid md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-xl shadow-lg text-center">
                 <h2 className="text-lg font-semibold text-gray-600">Receita Total</h2>
@@ -1239,11 +1303,44 @@ const FinanceTracker = ({ db, userId }) => {
                 <p className={`mt-2 text-3xl font-bold ${totalBalance >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>{formatCurrency(totalBalance)}</p>
               </div>
             </section>
-            <section className="bg-white p-6 rounded-xl shadow-lg text-center">
-              <button onClick={() => setIsAddTransactionPopupOpen(true)} className="w-full md:w-auto py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
-                Adicionar Nova Transação
-              </button>
+            
+            {/* Bloco de Ações e Importação (RETOMADO) */}
+            <section className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+              <div className="text-center">
+                <button onClick={() => setIsAddTransactionPopupOpen(true)} className="w-full md:w-auto py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                  Adicionar Nova Transação Manual
+                </button>
+              </div>
+              <div className="space-y-4 border p-4 rounded-md">
+                <h2 className="text-2xl font-bold text-gray-900">Importar Extratos CSV</h2>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="importClassified" checked={isClassifiedImport} onChange={(e) => setIsClassifiedImport(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded" />
+                  <label htmlFor="importClassified" className="text-sm text-gray-600">Importar ficheiro já classificado (Exportado deste app)</label>
+                </div>
+                {!isClassifiedImport && (
+                  <div className="flex gap-4">
+                    <button onClick={() => setImporter('Raul')} style={{ backgroundColor: importer === 'Raul' ? raulColor : '#e5e7eb', color: importer === 'Raul' ? 'white' : 'gray' }} className={`flex-1 py-2 px-4 rounded-md text-sm transition`}>Raul</button>
+                    <button onClick={() => setImporter('Karol')} style={{ backgroundColor: importer === 'Karol' ? karolColor : '#e5e7eb', color: importer === 'Karol' ? 'white' : 'gray' }} className={`flex-1 py-2 px-4 rounded-md text-sm transition`}>Karol</button>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  ref={csvInputRef}
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => csvInputRef.current.click()}
+                  disabled={isParsing || (!isClassifiedImport && !importer)}
+                  className="w-full py-2 px-4 rounded-md text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isParsing ? 'A importar...' : 'Importar CSV'}
+                </button>
+              </div>
             </section>
+            
+            {/* Bloco de Histórico */}
             <section className="bg-white p-6 rounded-xl shadow-lg">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">Histórico ({unclassifiedCount} por classificar)</h2>
@@ -1251,23 +1348,31 @@ const FinanceTracker = ({ db, userId }) => {
                   <i className="fas fa-filter text-xl"></i>
                 </button>
               </div>
-              {filteredHistoryTransactions.map(t => (
-                <div key={t.id} className="py-4 flex justify-between items-center border-b">
-                  <div>
-                    <p className="font-medium">{t.description}</p>
-                    <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
-                    <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      {t.importer && <span className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${t.importer === 'Raul' ? 'bg-blue-400' : 'bg-purple-600'}`}>{t.importer}</span>}
-                      <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300 p-1">
-                        <option value="">Classificar</option>
-                        {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => (<option key={cat} value={cat}>{cat}</option>))}
-                      </select>
-                      <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1"><i className="fas fa-trash"></i></button>
-                    </div>
+              <div className="overflow-x-auto">
+                {filteredHistoryTransactions.length > 0 ? (
+                  <div className="min-w-[500px]">
+                    {filteredHistoryTransactions.map(t => (
+                      <div key={t.id} className="py-4 flex justify-between items-center border-b">
+                        <div>
+                          <p className="font-medium">{t.description}</p>
+                          <p className="text-sm text-gray-500">{t.timestamp?.toDate().toLocaleDateString('pt-BR')}</p>
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            {t.importer && <span style={{ backgroundColor: getUserColor(t.importer, '#6b7280') }} className={`text-xs font-semibold text-white px-2 py-1 rounded-full`}>{t.importer}</span>}
+                            <select value={t.category || ''} onChange={(e) => classifyTransaction(t.id, 'category', e.target.value)} className="text-xs rounded border-gray-300 p-1">
+                              <option value="">Classificar</option>
+                              {(t.type === 'receita' ? revenueCategories : expenseCategories).map(cat => (<option key={cat} value={cat}>{cat}</option>))}
+                            </select>
+                            <button onClick={() => deleteTransaction(t.id)} className="text-red-500 hover:text-red-700 text-xs p-1"><i className="fas fa-trash"></i></button>
+                          </div>
+                        </div>
+                        <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
+                      </div>
+                    ))}
                   </div>
-                  <span className={`font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</span>
-                </div>
-              ))}
+                ) : (
+                  <p className="text-center text-gray-500 py-4">Nenhuma transação encontrada com os filtros atuais.</p>
+                )}
+              </div>
             </section>
           </>
         )}
@@ -1385,8 +1490,6 @@ const AuthScreen = ({ auth }) => {
   );
 };
 
-// --- NOVO COMPONENTE DE CONFIGURAÇÕES ---
-
 // Sub-componente para a tela de edição de usuários
 const UserConfig = ({ db, userId, onBack }) => {
   const [loading, setLoading] = useState(false);
@@ -1416,8 +1519,10 @@ const UserConfig = ({ db, userId, onBack }) => {
     try {
       setLoading(true);
       await setDoc(doc(db, `users/${userId}/config/users`), { users }, { merge: true });
+      // Usar StatusMessage
       alert('Usuários salvos com sucesso!');
     } catch (e) {
+      // Usar StatusMessage
       alert('Erro ao salvar usuários.');
       console.error("Erro ao salvar usuários:", e);
     } finally {
@@ -1471,8 +1576,8 @@ const CategoryConfig = ({ db, userId, onBack }) => {
 
   useEffect(() => {
     if (!db || !userId) return;
-    const defaultExpenseCategories = ['Aluguel', 'Contas', 'Alimentação', 'Transporte', 'Lazer', 'Outros'];
-    const defaultRevenueCategories = ['Salário', 'Investimentos', 'Renda Extra', 'Outros'];
+    const defaultExpenseCategories = ['Aluguel', 'Casa', 'Convênio', 'Crédito', 'Estudos', 'Farmácia', 'Flag', 'Gás', 'Internet', 'Investimento', 'Lanche', 'Locomoção', 'Luz', 'MaryJane', 'Mercado', 'Outros', 'Pets', 'Raulzinho', 'Streamings'].sort();
+    const defaultRevenueCategories = ['13º', 'Bônus', 'Férias', 'Outros', 'Rendimentos', 'Salário'].sort();
 
     const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
       if (docSnap.exists()) {
@@ -1480,7 +1585,6 @@ const CategoryConfig = ({ db, userId, onBack }) => {
         setExpenseCategories(data.expenseCategories && data.expenseCategories.length > 0 ? data.expenseCategories : defaultExpenseCategories);
         setRevenueCategories(data.revenueCategories && data.revenueCategories.length > 0 ? data.revenueCategories : defaultRevenueCategories);
       } else {
-        // Se o documento não existe, inicializa com as categorias padrão
         setExpenseCategories(defaultExpenseCategories);
         setRevenueCategories(defaultRevenueCategories);
       }
@@ -1495,8 +1599,10 @@ const CategoryConfig = ({ db, userId, onBack }) => {
         expenseCategories,
         revenueCategories
       }, { merge: true });
+      // Usar StatusMessage
       alert('Categorias salvas com sucesso!');
     } catch (e) {
+      // Usar StatusMessage
       alert('Erro ao salvar categorias.');
       console.error("Erro ao salvar categorias:", e);
     } finally {
@@ -1506,16 +1612,17 @@ const CategoryConfig = ({ db, userId, onBack }) => {
 
   const handleAddCategory = (category, type) => {
     if (type === 'expense' && category) {
-      setExpenseCategories([...expenseCategories, category]);
+      setExpenseCategories([...expenseCategories, category].sort());
       setNewExpenseCategory('');
     }
     if (type === 'revenue' && category) {
-      setRevenueCategories([...revenueCategories, category]);
+      setRevenueCategories([...revenueCategories, category].sort());
       setNewRevenueCategory('');
     }
   };
 
   const handleRemoveCategory = (categoryToRemove, type) => {
+    // Usar StatusMessage/Modal customizado
     if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
       if (type === 'expense') {
         setExpenseCategories(expenseCategories.filter(cat => cat !== categoryToRemove));
@@ -1541,6 +1648,9 @@ const CategoryConfig = ({ db, userId, onBack }) => {
   };
 
   const stopEditing = () => {
+    // Reordenar após edição, se necessário
+    setExpenseCategories(prev => [...prev].sort());
+    setRevenueCategories(prev => [...prev].sort());
     setEditingIndex({ type: null, index: null });
   };
 
@@ -1638,6 +1748,20 @@ const CategoryConfig = ({ db, userId, onBack }) => {
   );
 };
 
+// Sub-componente para a tela de configurações de conta (placeholder)
+const AccountConfig = ({ onBack }) => (
+    <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+      <div className="flex items-center gap-4 border-b pb-4 mb-4">
+        <button onClick={onBack} className="text-gray-600 hover:text-indigo-600">
+          <i className="fas fa-chevron-left"></i>
+        </button>
+        <h2 className="text-2xl font-bold">Minha Conta</h2>
+      </div>
+      <p className="text-gray-600">Funcionalidades de conta (e-mail, senha, etc.) serão implementadas aqui.</p>
+    </div>
+);
+
+
 // Componente principal de Configurações
 const SettingsView = ({ db, userId }) => {
   const [subView, setSubView] = useState(null);
@@ -1657,11 +1781,11 @@ const SettingsView = ({ db, userId }) => {
               <h1 className="text-3xl font-bold text-gray-800">Configurações</h1>
             </header>
             <button onClick={() => setSubView('users')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Usuários</span>
+              <span className="font-semibold text-lg">Usuários e Cores</span>
               <i className="fas fa-chevron-right text-gray-400"></i>
             </button>
             <button onClick={() => setSubView('categories')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-              <span className="font-semibold text-lg">Listas de gastos</span>
+              <span className="font-semibold text-lg">Gerenciar Categorias</span>
               <i className="fas fa-chevron-right text-gray-400"></i>
             </button>
             <button onClick={() => setSubView('account')} className="flex justify-between items-center w-full p-4 rounded-lg bg-gray-100 hover:bg-gray-200 transition">
@@ -1688,9 +1812,11 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [view, setView] = useState('finance');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [parsingMessage, setParsingMessage] = useState({ message: '', type: '' });
 
   useEffect(() => {
     try {
+      // Usar a estrutura real de importação do ambiente
       const firebaseConfig = {
         apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
         authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -1734,13 +1860,14 @@ function App() {
                       const currentToken = await getToken(messaging, { vapidKey });
                       if (currentToken) {
                         // Salva o token de registro no Firestore para enviar notificações push
-                        const tokenRef = doc(db, `users/${currentUserId}/fcmTokens`, currentToken);
+                        const tokenRef = doc(firestoreDb, `users/${currentUserId}/fcmTokens`, currentToken);
                         await setDoc(tokenRef, { token: currentToken, createdAt: serverTimestamp() });
                         console.log("FCM Token salvo com sucesso:", currentToken);
                       }
                     }
-                  } catch (err) {
+                  } catch (err) { 
                     console.error('Erro ao obter token ou salvar:', err);
+                    setParsingMessage({ message: "Erro ao configurar notificações.", type: "error" });
                   }
                 };
                 requestPermissionAndToken(user.uid);
@@ -1775,6 +1902,11 @@ function App() {
 
   return (
     <div className="relative min-h-screen md:flex">
+      <StatusMessage
+        message={parsingMessage.message}
+        type={parsingMessage.type}
+        onClose={() => setParsingMessage({ message: '', type: '' })}
+      />
       <Sidebar view={view} setView={setView} auth={auth} />
       <main className="flex-1 md:ml-64 bg-gray-100">
         {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
