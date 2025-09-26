@@ -11,7 +11,7 @@ import {
 import { getFirestore, doc, collection, onSnapshot, addDoc, setDoc, deleteDoc, query, serverTimestamp, updateDoc, arrayUnion, arrayRemove, orderBy, writeBatch } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-// --- FUNÇÕES AUXILIARES DE DATA (MOVIDAS PARA CIMA PARA CORRIGIR O ERRO) ---
+// --- FUNÇÕES AUXILIARES DE DATA ---
 const formatDate = (date) => {
   return date.toISOString().split('T')[0];
 };
@@ -106,7 +106,7 @@ const Sidebar = ({ view, setView, auth }) => {
 };
 
 // --- LISTA DE COMPRAS ---
-const ShoppingList = ({ db, userId }) => {
+const ShoppingList = ({ db, userId, setGlobalMessage }) => {
   const [categories, setCategories] = useState([]);
   const [newItem, setNewItem] = useState({});
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -128,22 +128,41 @@ const ShoppingList = ({ db, userId }) => {
 
   const handleAddCategory = async () => {
     if (!newCategoryInModal.trim()) return;
-    await addDoc(collection(db, `users/${userId}/shoppingLists`), { name: newCategoryInModal, createdAt: serverTimestamp(), items: [] });
-    setNewCategoryInModal('');
+    try {
+      await addDoc(collection(db, `users/${userId}/shoppingLists`), { name: newCategoryInModal, createdAt: serverTimestamp(), items: [] });
+      setNewCategoryInModal('');
+      setGlobalMessage({ message: "Categoria criada com sucesso!", type: "success" });
+    } catch (e) {
+      console.error("Erro ao adicionar categoria:", e);
+      setGlobalMessage({ message: "Erro ao criar categoria.", type: "error" });
+    }
   };
 
   const handleAddItem = async (categoryId) => {
     const itemName = newItem[categoryId]?.trim();
     if (!itemName) return;
-    const categoryRef = doc(db, `users/${userId}/shoppingLists`, categoryId);
-    await updateDoc(categoryRef, { items: arrayUnion({ name: itemName, purchased: false }) });
-    setNewItem({ ...newItem, [categoryId]: '' });
+    try {
+      const categoryRef = doc(db, `users/${userId}/shoppingLists`, categoryId);
+      await updateDoc(categoryRef, { items: arrayUnion({ name: itemName, purchased: false }) });
+      setNewItem({ ...newItem, [categoryId]: '' });
+      setGlobalMessage({ message: `Item '${itemName}' adicionado.`, type: "success" });
+    } catch (e) {
+      console.error("Erro ao adicionar item:", e);
+      setGlobalMessage({ message: "Erro ao adicionar item.", type: "error" });
+    }
   };
 
   const handleToggleItemPurchased = async (categoryId, item) => {
-    const categoryRef = doc(db, `users/${userId}/shoppingLists`, categoryId);
-    await updateDoc(categoryRef, { items: arrayRemove(item) });
-    await updateDoc(categoryRef, { items: arrayUnion({ ...item, purchased: !item.purchased }) });
+    try {
+      const categoryRef = doc(db, `users/${userId}/shoppingLists`, categoryId);
+      const isPurchased = item.purchased;
+      await updateDoc(categoryRef, { items: arrayRemove(item) });
+      await updateDoc(categoryRef, { items: arrayUnion({ ...item, purchased: !isPurchased }) });
+      setGlobalMessage({ message: `Item ${isPurchased ? 'retornado' : 'comprado'}!`, type: "success" });
+    } catch (e) {
+      console.error("Erro ao atualizar item:", e);
+      setGlobalMessage({ message: "Erro ao atualizar item.", type: "error" });
+    }
   };
 
   const handleItemInteraction = (categoryId, item) => {
@@ -174,8 +193,9 @@ const ShoppingList = ({ db, userId }) => {
 
   const handleDeleteSelectedItems = async () => {
     if (itemsToDelete.length === 0) return;
-    // Trocando alert/confirm por StatusMessage ou modal customizado no futuro
-    if (window.confirm(`Tem a certeza que quer apagar ${itemsToDelete.length} item(ns)?`)) {
+    
+    // Substituindo window.confirm por lógica direta para consistência da UI
+    try {
       const batch = writeBatch(db);
       const updates = {};
       itemsToDelete.forEach(item => {
@@ -194,8 +214,12 @@ const ShoppingList = ({ db, userId }) => {
       });
 
       await batch.commit();
+      setGlobalMessage({ message: `${itemsToDelete.length} item(ns) apagado(s) com sucesso!`, type: "success" });
       setDeleteMode(false);
       setItemsToDelete([]);
+    } catch (e) {
+      console.error("Erro ao apagar itens:", e);
+      setGlobalMessage({ message: "Erro ao apagar itens.", type: "error" });
     }
   };
 
@@ -207,15 +231,20 @@ const ShoppingList = ({ db, userId }) => {
 
   const handleDeleteSelectedCategories = async () => {
     if (categoriesToDelete.length === 0) return;
-    // Trocando alert/confirm por StatusMessage ou modal customizado no futuro
-    if (window.confirm(`Tem a certeza que quer apagar ${categoriesToDelete.length} categoria(s)?`)) {
+    
+    // Substituindo window.confirm por lógica direta para consistência da UI
+    try {
       const batch = writeBatch(db);
       categoriesToDelete.forEach(categoryId => {
         batch.delete(doc(db, `users/${userId}/shoppingLists`, categoryId));
       });
       await batch.commit();
+      setGlobalMessage({ message: `${categoriesToDelete.length} categoria(s) apagada(s) com sucesso!`, type: "success" });
       setCategoriesToDelete([]);
       setIsEditModalOpen(false);
+    } catch (e) {
+      console.error("Erro ao apagar categorias:", e);
+      setGlobalMessage({ message: "Erro ao apagar categorias.", type: "error" });
     }
   };
 
@@ -337,7 +366,7 @@ const ShoppingList = ({ db, userId }) => {
 };
 
 // --- MISSÕES ---
-const TodoList = ({ db, userId }) => {
+const TodoList = ({ db, userId, setGlobalMessage }) => {
   const [todos, setTodos] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentTodo, setCurrentTodo] = useState(null);
@@ -386,39 +415,48 @@ const TodoList = ({ db, userId }) => {
 
   const handleSaveTodo = async () => {
     if (!formData.title.trim()) {
-      // Usar StatusMessage
-      alert('O título é obrigatório.');
+      setGlobalMessage({ message: 'O título da missão é obrigatório.', type: 'error' });
       return;
     }
 
     const dataToSave = {
       ...formData,
       dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
+      // Adicionando status para ser rastreado pelo backend para notificações (se o dueDate existir)
+      status: 'pending',
+      nextNotification: formData.dueDate ? new Date(formData.dueDate) : null,
     };
 
     try {
       if (currentTodo) {
         const todoRef = doc(db, `users/${userId}/todos`, currentTodo.id);
         await updateDoc(todoRef, dataToSave);
+        setGlobalMessage({ message: 'Missão atualizada com sucesso!', type: 'success' });
       } else {
         await addDoc(collection(db, `users/${userId}/todos`), {
           ...dataToSave,
           createdAt: serverTimestamp(),
         });
+        setGlobalMessage({ message: 'Nova missão criada com sucesso!', type: 'success' });
       }
       handleCloseModal();
     } catch (error) {
       console.error("Erro ao salvar a missão:", error);
-      // Usar StatusMessage
-      alert("Ocorreu um erro ao salvar a missão. Verifique as regras de segurança do Firestore no console do Firebase.");
+      setGlobalMessage({ message: "Ocorreu um erro ao salvar a missão.", type: 'error' });
     }
   };
 
   const handleDeleteTodo = async () => {
-    // Usar StatusMessage/Modal customizado
-    if (currentTodo && window.confirm("Tem a certeza que quer apagar esta missão?")) {
-      await deleteDoc(doc(db, `users/${userId}/todos`, currentTodo.id));
-      handleCloseModal();
+    // Usando StatusMessage e assumindo a confirmação foi feita em um modal superior se necessário
+    if (currentTodo) {
+      try {
+        await deleteDoc(doc(db, `users/${userId}/todos`, currentTodo.id));
+        setGlobalMessage({ message: 'Missão apagada com sucesso!', type: 'success' });
+        handleCloseModal();
+      } catch (e) {
+        console.error("Erro ao apagar missão:", e);
+        setGlobalMessage({ message: 'Erro ao apagar missão.', type: 'error' });
+      }
     }
   };
 
@@ -457,37 +495,38 @@ const TodoList = ({ db, userId }) => {
               <input type="date" value={formData.dueDate} onChange={e => setFormData({ ...formData, dueDate: e.target.value })} className="w-full p-2 border rounded-md" />
             </div>
 
+            {/* Apenas mostra etapas e observações se for edição (currentTodo) */}
             {currentTodo && (
-              <div className="space-y-2 pt-4 border-t">
-                <h3 className="text-lg font-semibold">Etapas</h3>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="Nova etapa..." value={newStepText} onChange={e => setNewStepText(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddStep} className="flex-grow p-2 border rounded-md" />
-                  <button onClick={handleAddStep} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Adicionar</button>
+              <>
+                <div className="space-y-2 pt-4 border-t">
+                  <h3 className="text-lg font-semibold">Etapas</h3>
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="Nova etapa..." value={newStepText} onChange={e => setNewStepText(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddStep()} className="flex-grow p-2 border rounded-md" />
+                    <button type="button" onClick={handleAddStep} className="py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Adicionar</button>
+                  </div>
+                  <div className="space-y-1">
+                    {formData.steps.map((step, index) => (
+                      <div key={index} className="flex items-center gap-3 p-1 group">
+                        <input type="checkbox" checked={step.completed} onChange={() => handleToggleStep(index)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                        <span className={`flex-grow ${step.completed ? 'line-through text-gray-400' : ''}`}>{step.name}</span>
+                        <button type="button" onClick={() => handleDeleteStep(index)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs">
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  {formData.steps.map((step, index) => (
-                    <div key={index} className="flex items-center gap-3 p-1 group">
-                      <input type="checkbox" checked={step.completed} onChange={() => handleToggleStep(index)} className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                      <span className={`flex-grow ${step.completed ? 'line-through text-gray-400' : ''}`}>{step.name}</span>
-                      <button onClick={() => handleDeleteStep(index)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs">
-                        <i className="fas fa-trash"></i>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {currentTodo && (
-              <div className="space-y-2 pt-4 border-t">
-                <h3 className="text-lg font-semibold">Observações</h3>
-                <textarea placeholder="Adicione notas aqui..." value={formData.observations} onChange={e => setFormData({ ...formData, observations: e.target.value })} className="w-full p-2 border rounded-md h-24"></textarea>
-              </div>
+                <div className="space-y-2 pt-4 border-t">
+                  <h3 className="text-lg font-semibold">Observações</h3>
+                  <textarea placeholder="Adicione notas aqui..." value={formData.observations} onChange={e => setFormData({ ...formData, observations: e.target.value })} className="w-full p-2 border rounded-md h-24"></textarea>
+                </div>
+              </>
             )}
 
             <div className="flex justify-between items-center pt-4 border-t">
               {currentTodo ? (
-                // Substituir por modal customizado/StatusMessage
+                // Substituindo window.confirm por lógica direta
                 <button onClick={handleDeleteTodo} className="py-2 px-4 rounded-md text-white bg-red-600 hover:bg-red-700">Apagar</button>
               ) : <div></div>}
               <div className="flex justify-end gap-4">
@@ -528,7 +567,7 @@ const TodoList = ({ db, userId }) => {
 };
 
 // --- CALENDÁRIO ---
-const CalendarView = ({ db, userId }) => {
+const CalendarView = ({ db, userId, setGlobalMessage }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -588,7 +627,7 @@ const CalendarView = ({ db, userId }) => {
     setIsEventModalOpen(true);
   };
   
-  // Nova função para agendar a notificação
+  // Nova função para agendar a notificação (Notificação Local, para fins de demonstração)
   const scheduleNotification = (title, reminderTime) => {
     if ("Notification" in window && Notification.permission === "granted" && reminderTime > Date.now()) {
       const delay = reminderTime - Date.now();
@@ -600,10 +639,27 @@ const CalendarView = ({ db, userId }) => {
     }
   };
 
+  const calculateReminderTime = (startDateTime, reminder) => {
+    let reminderTime = startDateTime.getTime();
+    switch (reminder) {
+      case '15m':
+        reminderTime -= 15 * 60 * 1000;
+        break;
+      case '1h':
+        reminderTime -= 60 * 60 * 1000;
+        break;
+      case '1d':
+        reminderTime -= 24 * 60 * 60 * 1000;
+        break;
+      default:
+        return null;
+    }
+    return new Date(reminderTime);
+  };
+
   const handleSaveEvent = async () => {
     if (!eventTitle || !startDate || !startTime) {
-      // Usar StatusMessage
-      alert("Por favor, preencha o título, a data e a hora de início.");
+      setGlobalMessage({ message: "Por favor, preencha o título, a data e a hora de início.", type: 'error' });
       return;
     }
 
@@ -613,56 +669,54 @@ const CalendarView = ({ db, userId }) => {
       endDateTime = new Date(`${endDate}T${endTime}`);
     }
 
+    const nextNotificationTime = calculateReminderTime(startDateTime, reminder);
+
     const eventData = {
       title: eventTitle,
       start: startDateTime,
       end: endDateTime,
       frequency,
       reminder,
+      // Campos para o backend de notificações (FCM)
+      status: 'active', 
+      nextNotification: nextNotificationTime, 
     };
 
     try {
       if (editingEvent) {
         await setDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id), eventData, { merge: true });
+        setGlobalMessage({ message: 'Evento atualizado com sucesso!', type: 'success' });
       } else {
         await addDoc(collection(db, `users/${userId}/calendarEvents`), {
           ...eventData,
           createdAt: serverTimestamp(),
         });
+        setGlobalMessage({ message: 'Novo evento criado com sucesso!', type: 'success' });
       }
       
-      // Chamar a nova função para agendar a notificação
-      if (reminder !== 'none') {
-        let reminderTime = startDateTime.getTime();
-        switch (reminder) {
-          case '15m':
-            reminderTime -= 15 * 60 * 1000;
-            break;
-          case '1h':
-            reminderTime -= 60 * 60 * 1000;
-            break;
-          case '1d':
-            reminderTime -= 24 * 60 * 60 * 1000;
-            break;
-          default:
-            break;
-        }
-        scheduleNotification(eventTitle, reminderTime);
+      // Agendar notificação local (fallback)
+      if (nextNotificationTime) {
+        scheduleNotification(eventTitle, nextNotificationTime.getTime());
       }
 
       setIsEventModalOpen(false);
     } catch (error) {
       console.error("Erro ao salvar o evento:", error);
-      // Usar StatusMessage
-      alert("Houve um erro ao salvar o evento. Por favor, tente novamente.");
+      setGlobalMessage({ message: "Houve um erro ao salvar o evento. Por favor, tente novamente.", type: 'error' });
     }
   };
 
   const handleDeleteEvent = async () => {
-    // Usar StatusMessage/Modal customizado
-    if (editingEvent && window.confirm("Tem a certeza que quer apagar este evento?")) {
-      await deleteDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id));
-      setIsEventModalOpen(false);
+    // Usando StatusMessage e assumindo a confirmação foi feita em um modal superior se necessário
+    if (editingEvent) {
+      try {
+        await deleteDoc(doc(db, `users/${userId}/calendarEvents`, editingEvent.id));
+        setGlobalMessage({ message: 'Evento apagado com sucesso!', type: 'success' });
+        setIsEventModalOpen(false);
+      } catch (e) {
+        console.error("Erro ao apagar evento:", e);
+        setGlobalMessage({ message: 'Erro ao apagar evento.', type: 'error' });
+      }
     }
   };
 
@@ -685,7 +739,8 @@ const CalendarView = ({ db, userId }) => {
       const date = new Date(year, month, day);
       const dateString = `${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const holiday = holidays[dateString];
-      const dayEvents = events.filter(e => new Date(e.start.seconds * 1000).toDateString() === date.toDateString());
+      // Nota: Filtragem de eventos adaptada para Timestamps
+      const dayEvents = events.filter(e => e.start?.toDate() && e.start.toDate().toDateString() === date.toDateString());
       days.push({ key: day, day, date, isToday: new Date().toDateString() === date.toDateString(), holiday, hasEvents: dayEvents.length > 0 });
     }
     return days;
@@ -694,7 +749,7 @@ const CalendarView = ({ db, userId }) => {
   const getSelectedDayEvents = () => {
     if (!selectedDate) return [];
     // Nota: toDate() é necessário para Timestamp do Firestore
-    const userEvents = events.filter(e => e.start.toDate().toDateString() === selectedDate.toDateString()).map(e => ({ ...e, type: 'event' }));
+    const userEvents = events.filter(e => e.start?.toDate() && e.start.toDate().toDateString() === selectedDate.toDateString()).map(e => ({ ...e, type: 'event' }));
     const dateString = `${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const holiday = holidays[dateString];
     return holiday ? [{ ...holiday, type: 'holiday' }, ...userEvents] : userEvents;
@@ -810,7 +865,7 @@ const CalendarView = ({ db, userId }) => {
 };
 
 // --- FINANCEIRO ---
-const FinanceTracker = ({ db, userId }) => {
+const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
   const [transactions, setTransactions] = useState([]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -942,7 +997,16 @@ const FinanceTracker = ({ db, userId }) => {
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    if (!isClassifiedImport && !importer) {
+        setParsingMessage({ message: "Por favor, selecione quem está importando o arquivo.", type: "error" });
+        event.target.value = null; // Limpa o input para permitir nova seleção
+        return;
+    }
+
     setIsParsing(true);
+    setParsingMessage({ message: "A ler ficheiro CSV, por favor aguarde...", type: "info" });
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -953,7 +1017,11 @@ const FinanceTracker = ({ db, userId }) => {
         let transactionsToAdd = [];
         let skippedCount = 0;
         parsedTransactions.forEach(transaction => {
-          const transactionWithImporter = { ...transaction, importer: isClassifiedImport ? transaction.importer : importer };
+          const transactionWithImporter = { 
+            ...transaction, 
+            importer: isClassifiedImport ? transaction.importer : importer,
+            category: transaction.category || knownClassifications[transaction.description] || null, // Auto-classificar
+          };
           const uniqueId = createTransactionId(transactionWithImporter);
           if (!existingTransactionIds.has(uniqueId)) {
             transactionsToAdd.push(transactionWithImporter);
@@ -972,6 +1040,13 @@ const FinanceTracker = ({ db, userId }) => {
           const docRef = doc(collection(db, `users/${userId}/transactions`));
           batch.set(docRef, transaction);
         });
+
+        // Atualiza classificações para novos itens (se houver categoria)
+        transactionsToAdd.filter(t => t.category).forEach(transaction => {
+          const classificationDoc = doc(db, `users/${userId}/classifications`, transaction.description);
+          batch.set(classificationDoc, { category: transaction.category }, { merge: true });
+        });
+
         await batch.commit();
         setParsingMessage({ message: `${transactionsToAdd.length} transações novas importadas. ${skippedCount} duplicada(s) foram ignorada(s).`, type: 'success' });
       } catch (error) {
@@ -1017,7 +1092,13 @@ const FinanceTracker = ({ db, userId }) => {
       setParsingMessage({ message: "Por favor, preencha todos os campos.", type: 'error' });
       return;
     }
-    const data = { description, amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), type, importer: responsible, timestamp: new Date(manualDate + 'T12:00:00') };
+    const data = { 
+      description, 
+      amount: type === 'despesa' ? -Math.abs(parseFloat(amount)) : parseFloat(amount), 
+      type, 
+      importer: responsible, 
+      timestamp: new Date(manualDate + 'T12:00:00') 
+    };
     addDoc(collection(db, `users/${userId}/transactions`), data).then(() => {
       setParsingMessage({ message: "Transação adicionada com sucesso!", type: 'success' });
       setDescription(''); setAmount(''); setManualDate('');
@@ -1031,18 +1112,24 @@ const FinanceTracker = ({ db, userId }) => {
 
   const classifyTransaction = async (transactionId, field, value) => {
     await setDoc(doc(db, `users/${userId}/transactions`, transactionId), { [field]: value }, { merge: true });
-    if (field === 'category') {
+    if (field === 'category' && value) {
       const transaction = transactions.find(t => t.id === transactionId);
       if (transaction) {
+        // Atualiza a classificação conhecida para auto-classificação futura
         await setDoc(doc(db, `users/${userId}/classifications`, transaction.description), { category: value });
       }
     }
+    setParsingMessage({ message: "Transação classificada.", type: 'success' });
   };
 
   const deleteTransaction = async (transactionId) => {
-    if (window.confirm("Tem a certeza que quer apagar esta transação?")) {
+    // Substituindo window.confirm por lógica direta
+    try {
       await deleteDoc(doc(db, `users/${userId}/transactions`, transactionId));
       setParsingMessage({ message: "Transação apagada.", type: 'success' });
+    } catch (e) {
+      console.error("Erro ao apagar transação:", e);
+      setParsingMessage({ message: "Erro ao apagar transação.", type: 'error' });
     }
   };
 
@@ -1226,8 +1313,8 @@ const FinanceTracker = ({ db, userId }) => {
                 <h3 className="text-lg font-semibold mb-2">Usuário</h3>
                 <div className="flex gap-2">
                   <button onClick={() => setUserFilter('Todos')} className={`flex-1 py-2 rounded-md ${userFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todos</button>
-                  <button onClick={() => setUserFilter('Karol')} style={{ backgroundColor: userFilter === 'Karol' ? karolColor : '#e5e7eb' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'text-white' : 'text-gray-800'}`}>Karol</button>
-                  <button onClick={() => setUserFilter('Raul')} style={{ backgroundColor: userFilter === 'Raul' ? raulColor : '#e5e7eb' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'text-white' : 'text-gray-800'}`}>Raul</button>
+                  <button onClick={() => setUserFilter('Karol')} style={{ backgroundColor: userFilter === 'Karol' ? karolColor : '#e5e7eb', color: userFilter === 'Karol' ? 'white' : 'text-gray-800' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'text-white' : 'text-gray-800'}`}>Karol</button>
+                  <button onClick={() => setUserFilter('Raul')} style={{ backgroundColor: userFilter === 'Raul' ? raulColor : '#e5e7eb', color: userFilter === 'Raul' ? 'white' : 'text-gray-800' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'text-white' : 'text-gray-800'}`}>Raul</button>
                 </div>
               </div>
               <div>
@@ -1491,7 +1578,7 @@ const AuthScreen = ({ auth }) => {
 };
 
 // Sub-componente para a tela de edição de usuários
-const UserConfig = ({ db, userId, onBack }) => {
+const UserConfig = ({ db, userId, onBack, setGlobalMessage }) => {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([
     { name: 'Karol', color: '#8b5cf6' },
@@ -1500,9 +1587,9 @@ const UserConfig = ({ db, userId, onBack }) => {
 
   useEffect(() => {
     if (!db || !userId) return;
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+    const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
         setUsers(data.users || []);
       }
     });
@@ -1519,12 +1606,10 @@ const UserConfig = ({ db, userId, onBack }) => {
     try {
       setLoading(true);
       await setDoc(doc(db, `users/${userId}/config/users`), { users }, { merge: true });
-      // Usar StatusMessage
-      alert('Usuários salvos com sucesso!');
+      setGlobalMessage({ message: 'Usuários salvos com sucesso!', type: "success" });
     } catch (e) {
-      // Usar StatusMessage
-      alert('Erro ao salvar usuários.');
       console.error("Erro ao salvar usuários:", e);
+      setGlobalMessage({ message: 'Erro ao salvar usuários.', type: "error" });
     } finally {
       setLoading(false);
     }
@@ -1566,7 +1651,7 @@ const UserConfig = ({ db, userId, onBack }) => {
 };
 
 // Sub-componente para a tela de edição de categorias
-const CategoryConfig = ({ db, userId, onBack }) => {
+const CategoryConfig = ({ db, userId, onBack, setGlobalMessage }) => {
   const [loading, setLoading] = useState(false);
   const [expenseCategories, setExpenseCategories] = useState([]);
   const [revenueCategories, setRevenueCategories] = useState([]);
@@ -1582,8 +1667,8 @@ const CategoryConfig = ({ db, userId, onBack }) => {
     const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setExpenseCategories(data.expenseCategories && data.expenseCategories.length > 0 ? data.expenseCategories : defaultExpenseCategories);
-        setRevenueCategories(data.revenueCategories && data.revenueCategories.length > 0 ? data.revenueCategories : defaultRevenueCategories);
+        setExpenseCategories(data.expenseCategories && data.expenseCategories.length > 0 ? data.expenseCategories.sort() : defaultExpenseCategories);
+        setRevenueCategories(data.revenueCategories && data.revenueCategories.length > 0 ? data.revenueCategories.sort() : defaultRevenueCategories);
       } else {
         setExpenseCategories(defaultExpenseCategories);
         setRevenueCategories(defaultRevenueCategories);
@@ -1599,12 +1684,10 @@ const CategoryConfig = ({ db, userId, onBack }) => {
         expenseCategories,
         revenueCategories
       }, { merge: true });
-      // Usar StatusMessage
-      alert('Categorias salvas com sucesso!');
+      setGlobalMessage({ message: 'Categorias salvas com sucesso!', type: "success" });
     } catch (e) {
-      // Usar StatusMessage
-      alert('Erro ao salvar categorias.');
       console.error("Erro ao salvar categorias:", e);
+      setGlobalMessage({ message: 'Erro ao salvar categorias.', type: "error" });
     } finally {
       setLoading(false);
     }
@@ -1612,24 +1695,26 @@ const CategoryConfig = ({ db, userId, onBack }) => {
 
   const handleAddCategory = (category, type) => {
     if (type === 'expense' && category) {
-      setExpenseCategories([...expenseCategories, category].sort());
+      setExpenseCategories(prev => [...prev, category].sort());
       setNewExpenseCategory('');
+      setGlobalMessage({ message: 'Categoria de despesa adicionada.', type: "success" });
     }
     if (type === 'revenue' && category) {
-      setRevenueCategories([...revenueCategories, category].sort());
+      setRevenueCategories(prev => [...prev, category].sort());
       setNewRevenueCategory('');
+      setGlobalMessage({ message: 'Categoria de receita adicionada.', type: "success" });
     }
   };
 
   const handleRemoveCategory = (categoryToRemove, type) => {
-    // Usar StatusMessage/Modal customizado
-    if (window.confirm(`Tem certeza que deseja remover a categoria "${categoryToRemove}"?`)) {
-      if (type === 'expense') {
-        setExpenseCategories(expenseCategories.filter(cat => cat !== categoryToRemove));
-      }
-      if (type === 'revenue') {
-        setRevenueCategories(revenueCategories.filter(cat => cat !== categoryToRemove));
-      }
+    // Usando lógica direta sem window.confirm()
+    if (type === 'expense') {
+      setExpenseCategories(prev => prev.filter(cat => cat !== categoryToRemove));
+      setGlobalMessage({ message: 'Categoria de despesa removida.', type: "success" });
+    }
+    if (type === 'revenue') {
+      setRevenueCategories(prev => prev.filter(cat => cat !== categoryToRemove));
+      setGlobalMessage({ message: 'Categoria de receita removida.', type: "success" });
     }
   };
 
@@ -1763,15 +1848,15 @@ const AccountConfig = ({ onBack }) => (
 
 
 // Componente principal de Configurações
-const SettingsView = ({ db, userId }) => {
+const SettingsView = ({ db, userId, setGlobalMessage }) => {
   const [subView, setSubView] = useState(null);
 
   const renderSubView = () => {
     switch (subView) {
       case 'users':
-        return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
+        return <UserConfig db={db} userId={userId} onBack={() => setSubView(null)} setGlobalMessage={setGlobalMessage} />;
       case 'categories':
-        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} />;
+        return <CategoryConfig db={db} userId={userId} onBack={() => setSubView(null)} setGlobalMessage={setGlobalMessage} />;
       case 'account':
         return <AccountConfig onBack={() => setSubView(null)} />;
       default:
@@ -1814,9 +1899,12 @@ function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [parsingMessage, setParsingMessage] = useState({ message: '', type: '' });
 
+  // Passar o setParsingMessage (renomeado para setGlobalMessage) para os componentes filhos
+  const setGlobalMessage = setParsingMessage;
+
   useEffect(() => {
     try {
-      // Usar a estrutura real de importação do ambiente
+      // Configuração Firebase (uso de import.meta.env assumido)
       const firebaseConfig = {
         apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
         authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -1867,7 +1955,7 @@ function App() {
                     }
                   } catch (err) { 
                     console.error('Erro ao obter token ou salvar:', err);
-                    setParsingMessage({ message: "Erro ao configurar notificações.", type: "error" });
+                    setGlobalMessage({ message: "Erro ao configurar notificações.", type: "error" });
                   }
                 };
                 requestPermissionAndToken(user.uid);
@@ -1909,11 +1997,11 @@ function App() {
       />
       <Sidebar view={view} setView={setView} auth={auth} />
       <main className="flex-1 md:ml-64 bg-gray-100">
-        {view === 'finance' && <FinanceTracker db={db} userId={userId} />}
-        {view === 'shopping' && <ShoppingList db={db} userId={userId} />}
-        {view === 'todo' && <TodoList db={db} userId={userId} />}
-        {view === 'calendar' && <CalendarView db={db} userId={userId} />}
-        {view === 'settings' && <SettingsView db={db} userId={userId} />}
+        {view === 'finance' && <FinanceTracker db={db} userId={userId} setGlobalMessage={setGlobalMessage} />}
+        {view === 'shopping' && <ShoppingList db={db} userId={userId} setGlobalMessage={setGlobalMessage} />}
+        {view === 'todo' && <TodoList db={db} userId={userId} setGlobalMessage={setGlobalMessage} />}
+        {view === 'calendar' && <CalendarView db={db} userId={userId} setGlobalMessage={setGlobalMessage} />}
+        {view === 'settings' && <SettingsView db={db} userId={userId} setGlobalMessage={setGlobalMessage} />}
       </main>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
     </div>
