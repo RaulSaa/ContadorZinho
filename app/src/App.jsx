@@ -419,12 +419,19 @@ const TodoList = ({ db, userId, setGlobalMessage }) => {
       return;
     }
 
+    const dueDate = formData.dueDate ? new Date(formData.dueDate) : null;
+    let nextNotification = null;
+    
+    // Se há data limite, a notificação será enviada na data limite (ou um pouco antes se for refinado)
+    if (dueDate) {
+      nextNotification = dueDate;
+    }
+
     const dataToSave = {
       ...formData,
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : null,
-      // Adicionando status para ser rastreado pelo backend para notificações (se o dueDate existir)
-      status: 'pending',
-      nextNotification: formData.dueDate ? new Date(formData.dueDate) : null,
+      dueDate: dueDate,
+      status: nextNotification ? 'pending' : 'active', // 'pending' se tiver data para notificar
+      nextNotification: nextNotification,
     };
 
     try {
@@ -627,18 +634,7 @@ const CalendarView = ({ db, userId, setGlobalMessage }) => {
     setIsEventModalOpen(true);
   };
   
-  // Nova função para agendar a notificação (Notificação Local, para fins de demonstração)
-  const scheduleNotification = (title, reminderTime) => {
-    if ("Notification" in window && Notification.permission === "granted" && reminderTime > Date.now()) {
-      const delay = reminderTime - Date.now();
-      setTimeout(() => {
-        new Notification("Lembrete de Evento", {
-          body: title,
-        });
-      }, delay);
-    }
-  };
-
+  // Função auxiliar para calcular a hora real da notificação com base no lembrete
   const calculateReminderTime = (startDateTime, reminder) => {
     let reminderTime = startDateTime.getTime();
     switch (reminder) {
@@ -656,6 +652,19 @@ const CalendarView = ({ db, userId, setGlobalMessage }) => {
     }
     return new Date(reminderTime);
   };
+  
+  // Função para agendar a notificação local (fallback)
+  const scheduleNotification = (title, reminderTime) => {
+    if ("Notification" in window && Notification.permission === "granted" && reminderTime > Date.now()) {
+      const delay = reminderTime - Date.now();
+      setTimeout(() => {
+        new Notification("Lembrete de Evento", {
+          body: title,
+        });
+      }, delay);
+    }
+  };
+
 
   const handleSaveEvent = async () => {
     if (!eventTitle || !startDate || !startTime) {
@@ -669,6 +678,7 @@ const CalendarView = ({ db, userId, setGlobalMessage }) => {
       endDateTime = new Date(`${endDate}T${endTime}`);
     }
 
+    // Calcula a próxima hora para a Cloud Function usar como gatilho
     const nextNotificationTime = calculateReminderTime(startDateTime, reminder);
 
     const eventData = {
@@ -694,7 +704,7 @@ const CalendarView = ({ db, userId, setGlobalMessage }) => {
         setGlobalMessage({ message: 'Novo evento criado com sucesso!', type: 'success' });
       }
       
-      // Agendar notificação local (fallback)
+      // Agendar notificação local (fallback para navegador aberto)
       if (nextNotificationTime) {
         scheduleNotification(eventTitle, nextNotificationTime.getTime());
       }
@@ -910,14 +920,10 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
       }
     });
 
-    // 2. Carregar Configurações de Categorias
+    // 2. Carregar Configurações de Categorias (Placeholder para manter as arrays locais hardcoded)
     const unsubCategories = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Nota: As categorias padrão no FinanceTracker ainda estão codificadas para fins de demonstração,
-        // mas em um aplicativo real você usaria as categorias carregadas aqui para os dropdowns.
-        // As listas de categorias locais (expenseCategories/revenueCategories) devem ser dinâmicas.
-        // Mantendo as arrays locais hardcoded por enquanto para focar na UI do CSV.
+        // Lógica de uso de categorias personalizadas seria implementada aqui se o front-end usasse essa lista diretamente
       }
     });
 
@@ -1138,32 +1144,52 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
     category: t.category || knownClassifications[t.description] || null
   })).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
-  const transactionsForSummary = processedTransactions.filter(t => {
-    const transactionDate = t.timestamp?.toDate();
-    if (!transactionDate) return false;
-    const start = startDate ? new Date(startDate + 'T00:00:00') : null;
-    const end = endDate ? new Date(endDate + 'T23:59:59') : null;
-    if (start && transactionDate < start) return false;
-    if (end && transactionDate > end) return false;
-    // O filtro de usuário para gráficos é aplicado aqui
-    if (activeTab === 'graficos' && userFilter !== 'Todos' && t.importer !== userFilter) return false;
-    return true;
-  });
+  // --- FUNÇÃO CENTRAL DE FILTRAGEM ---
+  const applyFilters = (transactions) => {
+    return transactions.filter(t => {
+        const transactionDate = t.timestamp?.toDate();
+        if (!transactionDate) return false;
+        
+        // 1. Filtro de Data (Aplicado a TUDO)
+        const start = startDate ? new Date(startDate + 'T00:00:00') : null;
+        const end = endDate ? new Date(endDate + 'T23:59:59') : null;
+        if (start && transactionDate < start) return false;
+        if (end && transactionDate > end) return false;
+        
+        // 2. Filtro de Usuário
+        if (userFilter !== 'Todos' && t.importer !== userFilter) return false;
+        
+        // 3. Filtro de Tipo
+        if (typeFilter !== 'Todos' && t.type !== typeFilter) return false;
+        
+        // 4. Filtro de Classificação (Ignorado para o cálculo de Resumo, mas aplicado no Histórico)
+        // Aplicamos o filtro de classificação apenas na exibição do histórico,
+        // mas as transações passadas para os gráficos devem ser tratadas separadamente.
+        
+        return true;
+    });
+  }
 
-  const filteredHistoryTransactions = transactionsForSummary.filter(t => {
+  // Transações base filtradas por Data, Usuário e Tipo
+  const transactionsForSummaryAndCharts = applyFilters(processedTransactions);
+
+  // Filtra APENAS para a TELA DE HISTÓRICO (aplicando o filtro de Classificação)
+  const filteredHistoryTransactions = transactionsForSummaryAndCharts.filter(t => {
     if (classificationFilter === 'Classificados' && (!t.category || t.category === '')) return false;
     if (classificationFilter === 'A Classificar' && t.category && t.category !== '') return false;
-    if (typeFilter !== 'Todos' && t.type !== typeFilter) return false;
-    // O filtro de usuário para a lista de histórico também é aplicado aqui
-    if (activeTab === 'lancamentos' && userFilter !== 'Todos' && t.importer !== userFilter) return false;
     return true;
   });
 
-  const totalRevenue = transactionsForSummary.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactionsForSummary.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
+  // Cálculo de Resumo (Usa transactionsForSummaryAndCharts, sem filtro de Classificação ou Investimento/Rendimentos)
+  const totalRevenue = transactionsForSummaryAndCharts.filter(t => t.type === 'receita' && t.category !== 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactionsForSummaryAndCharts.filter(t => t.type === 'despesa' && t.category !== 'Investimento').reduce((sum, t) => sum + t.amount, 0);
   const totalBalance = totalRevenue + totalExpense;
+
+  // --- DADOS PARA GRÁFICOS (AGORA USAM transactionsForSummaryAndCharts) ---
+
+  // 1. Dados para Gráfico de Barras (Total por Categoria)
   const barChartData = Object.entries(
-    transactionsForSummary
+    transactionsForSummaryAndCharts
       .filter(t => t.type === 'despesa' && t.category && t.category !== 'Investimento')
       .reduce((acc, t) => {
         if (!acc[t.category]) acc[t.category] = 0;
@@ -1172,7 +1198,8 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
       }, {})
   ).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
 
-  const monthlyData = transactionsForSummary.reduce((acc, t) => {
+  // 2. Dados para Gráfico Mensal (Receita vs. Despesa)
+  const monthlyData = transactionsForSummaryAndCharts.reduce((acc, t) => {
     if (!t.timestamp) return acc;
     const monthYear = new Intl.DateTimeFormat('pt-BR', { year: '2-digit', month: 'short' }).format(t.timestamp.toDate());
     if (!acc[monthYear]) {
@@ -1187,7 +1214,8 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
   }, {});
   const monthlyChartData = Object.values(monthlyData).reverse();
 
-  const monthlyFixedCostData = transactionsForSummary
+  // 3. Dados para Custos Fixos Mensais (Agora respeita userFilter e typeFilter)
+  const monthlyFixedCostData = transactionsForSummaryAndCharts
     .filter(t => t.type === 'despesa' && selectedFixedCosts.includes(t.category))
     .reduce((acc, t) => {
       if (!t.timestamp) return acc;
@@ -1203,8 +1231,8 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
     }, {});
   const monthlyFixedCostChartData = Object.values(monthlyFixedCostData).reverse();
 
-  const totalInvestido = transactionsForSummary.filter(t => t.category === 'Investimento').reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const totalRendimentos = transactionsForSummary.filter(t => t.category === 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
+  const totalInvestido = transactionsForSummaryAndCharts.filter(t => t.category === 'Investimento').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const totalRendimentos = transactionsForSummaryAndCharts.filter(t => t.category === 'Rendimentos').reduce((sum, t) => sum + t.amount, 0);
 
   const handleFixedCostSelection = (category) => {
     setSelectedFixedCosts(prev =>
@@ -1313,8 +1341,8 @@ const FinanceTracker = ({ db, userId, setGlobalMessage }) => {
                 <h3 className="text-lg font-semibold mb-2">Usuário</h3>
                 <div className="flex gap-2">
                   <button onClick={() => setUserFilter('Todos')} className={`flex-1 py-2 rounded-md ${userFilter === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>Todos</button>
-                  <button onClick={() => setUserFilter('Karol')} style={{ backgroundColor: userFilter === 'Karol' ? karolColor : '#e5e7eb', color: userFilter === 'Karol' ? 'white' : 'text-gray-800' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'text-white' : 'text-gray-800'}`}>Karol</button>
-                  <button onClick={() => setUserFilter('Raul')} style={{ backgroundColor: userFilter === 'Raul' ? raulColor : '#e5e7eb', color: userFilter === 'Raul' ? 'white' : 'text-gray-800' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'text-white' : 'text-gray-800'}`}>Raul</button>
+                  <button onClick={() => setUserFilter('Karol')} style={{ backgroundColor: userFilter === 'Karol' ? karolColor : '#e5e7eb', color: userFilter === 'Karol' ? 'white' : 'gray' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Karol' ? 'text-white' : 'text-gray-800'}`}>Karol</button>
+                  <button onClick={() => setUserFilter('Raul')} style={{ backgroundColor: userFilter === 'Raul' ? raulColor : '#e5e7eb', color: userFilter === 'Raul' ? 'white' : 'gray' }} className={`flex-1 py-2 rounded-md ${userFilter === 'Raul' ? 'text-white' : 'text-gray-800'}`}>Raul</button>
                 </div>
               </div>
               <div>
@@ -1589,8 +1617,7 @@ const UserConfig = ({ db, userId, onBack, setGlobalMessage }) => {
     if (!db || !userId) return;
     const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/users`), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setUsers(data.users || []);
+        setUsers(docSnap.data().users || []);
       }
     });
     return () => unsubscribe();
@@ -1661,8 +1688,8 @@ const CategoryConfig = ({ db, userId, onBack, setGlobalMessage }) => {
 
   useEffect(() => {
     if (!db || !userId) return;
-    const defaultExpenseCategories = ['Aluguel', 'Casa', 'Convênio', 'Crédito', 'Estudos', 'Farmácia', 'Flag', 'Gás', 'Internet', 'Investimento', 'Lanche', 'Locomoção', 'Luz', 'MaryJane', 'Mercado', 'Outros', 'Pets', 'Raulzinho', 'Streamings'].sort();
-    const defaultRevenueCategories = ['13º', 'Bônus', 'Férias', 'Outros', 'Rendimentos', 'Salário'].sort();
+    const defaultExpenseCategories = ["Aluguel", "Casa", "Convênio", "Crédito", "Estudos", "Farmácia", "Flag", "Gás", "Internet", "Investimento", "Lanche", "Locomoção", "Luz", "MaryJane", "Mercado", "Outros", "Pets", "Raulzinho", "Streamings"].sort();
+    const defaultRevenueCategories = ["13º", "Bônus", "Férias", "Outros", "Rendimentos", "Salário"].sort();
 
     const unsubscribe = onSnapshot(doc(db, `users/${userId}/config/categories`), (docSnap) => {
       if (docSnap.exists()) {
